@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -13,10 +15,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 // 契约类型是嵌套在接口里的：C# 的嵌套类型不被实现类继承，因此在本文件顶部做一次别名，
 // 让下面的实现代码保持可读（对外暴露的类型名仍是 IBiliLoginService.XXX）。
 using BiliApiException = BiliMusicDotNet.Abstracts.IBiliLoginService.BiliApiException;
+using BiliLoginCredentials = BiliMusicDotNet.Abstracts.IBiliLoginService.BiliLoginCredentials;
 using BiliUserProfile = BiliMusicDotNet.Abstracts.IBiliLoginService.BiliUserProfile;
+using LoggedOutEventArgs = BiliMusicDotNet.Abstracts.IBiliLoginService.LoggedOutEventArgs;
 using LoginState = BiliMusicDotNet.Abstracts.IBiliLoginService.LoginState;
 using LoginStateChangedEventArgs = BiliMusicDotNet.Abstracts.IBiliLoginService.LoginStateChangedEventArgs;
+using LoginSucceededEventArgs = BiliMusicDotNet.Abstracts.IBiliLoginService.LoginSucceededEventArgs;
+using QrLoginOutcome = BiliMusicDotNet.Abstracts.IBiliLoginService.QrLoginOutcome;
+using QrLoginResult = BiliMusicDotNet.Abstracts.IBiliLoginService.QrLoginResult;
 using QrSession = BiliMusicDotNet.Abstracts.IBiliLoginService.QrSession;
+using QrStatusResult = BiliMusicDotNet.Abstracts.IBiliLoginService.QrStatusResult;
 
 namespace BiliMusicDotNet.Services;
 
@@ -42,6 +50,9 @@ public sealed class BiliLoginService : IBiliLoginService
     /// <summary>登录接口要求的 Referer（与内容接口的取值不同，写错会被风控）。</summary>
     private const string LoginReferer = PassportOrigin + "/login";
 
+    /// <summary>数据接口的域名（登录态查询 <c>nav</c> 在此域；凭据的 Cookie 域也以它为准）。</summary>
+    private const string ApiOrigin = "https://api.bilibili.com";
+
     /// <summary>现代桌面浏览器 UA：默认 UA 中包含的 "unknown" 特征容易被风控针对。</summary>
     private const string UserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -50,16 +61,47 @@ public sealed class BiliLoginService : IBiliLoginService
     /// <summary>二维码有效期（B 站实测约 3 分钟），既是会话的展示用失效时刻，也是轮询的兜底超时。</summary>
     private static readonly TimeSpan QrCodeLifetime = TimeSpan.FromMinutes(3);
 
+    /// <summary>轮询间隔。低于 1 秒的请求特征会明显偏离正常客户端，不建议再压。</summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(1800);
+
+    /// <summary>单次轮询请求的超时；超时按"一次失败"处理，不中断整个流程。</summary>
+    private static readonly TimeSpan PollRequestTimeout = TimeSpan.FromSeconds(10);
+
     /// <summary>取码请求的超时（可交互路径，失败要快速反馈给用户）。</summary>
     private static readonly TimeSpan GenerateRequestTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>连续网络失败多少次后放弃轮询。</summary>
+    private const int MaxConsecutiveFailures = 5;
+
+    /// <summary>B 站扫码状态码：未扫码。</summary>
+    private const int RawNotScanned = 86101;
+
+    /// <summary>B 站扫码状态码：已扫码待确认。</summary>
+    private const int RawNotConfirmed = 86090;
+
+    /// <summary>B 站扫码状态码：登录成功。</summary>
+    private const int RawSuccess = 0;
+
+    /// <summary>B 站扫码状态码：二维码已失效。</summary>
+    private const int RawExpired = 86038;
+
+    /// <summary>提示文本里的 HTML 实体/标签残留（接口会返回 <c>&amp;nbsp;</c>）。</summary>
+    private static readonly Regex HtmlResidue = new(@"&nbsp;|<[^>]+>", RegexOptions.Compiled);
 
     private readonly object _gate = new();
     private readonly ILogger<BiliLoginService> _logger;
     private readonly CookieContainer _cookies = new();
 
+    /// <summary>保证同一时刻只有一个轮询在跑（同一个 qrcode_key 并发轮询属于异常调用）。</summary>
+    private readonly SemaphoreSlim _pollGate = new(1, 1);
+
+    /// <summary>已处理过登录成功的 qrcode_key，避免重复轮询时重复触发登录事件。</summary>
+    private readonly ConcurrentQueue<string> _processedKeys = new();
+
     private HttpClient _http;
     private bool _disposed;
 
+    private BiliLoginCredentials? _credentials;
     private LoginState _state = LoginState.Idle;
 
     /// <summary>
@@ -105,6 +147,12 @@ public sealed class BiliLoginService : IBiliLoginService
     public event EventHandler<LoginStateChangedEventArgs>? StateChanged;
 
     /// <inheritdoc />
+    public event EventHandler<LoginSucceededEventArgs>? LoginSucceeded;
+
+    /// <inheritdoc />
+    public event EventHandler<LoggedOutEventArgs>? LoggedOut;
+
+    /// <inheritdoc />
     public LoginState State
     {
         get
@@ -115,6 +163,21 @@ public sealed class BiliLoginService : IBiliLoginService
             }
         }
     }
+
+    /// <inheritdoc />
+    public BiliLoginCredentials? CurrentCredentials
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _credentials;
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public bool IsLoggedIn => CurrentCredentials is not null;
 
     /// <inheritdoc />
     public async Task<QrSession> CreateQrSessionAsync(CancellationToken cancellationToken = default)
@@ -159,6 +222,148 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <inheritdoc />
+    public Task<QrStatusResult> PollQrStatusAsync(QrSession session, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return PollQrStatusAsync(session, publishState: true, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<QrLoginResult> WaitForConfirmationAsync(
+        QrSession session,
+        IProgress<QrStatusResult>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ThrowIfDisposed();
+
+        await _pollGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_state is LoginState.Idle or LoginState.Expired or LoginState.TimedOut or LoginState.Failed)
+            {
+                SetState(LoginState.WaitingForScan, "请使用哔哩哔哩手机客户端扫描二维码", profile: null);
+            }
+
+            // 兜底超时取"二维码自身失效时刻"与"本次调用起点 + 有效期"中较早者：
+            // 前者是 B 站定的时效，后者保证续等（TimedOut 后重入）不会无限循环。
+            var now = DateTimeOffset.Now;
+            var deadline = session.ExpiresAt < now + QrCodeLifetime ? session.ExpiresAt : now + QrCodeLifetime;
+
+            var consecutiveFailures = 0;
+            QrLoginResult? terminal = null;
+
+            while (terminal is null)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (DateTimeOffset.Now >= deadline)
+                {
+                    _logger.LogWarning("扫码登录超时（有效期 {Lifetime}）", QrCodeLifetime);
+                    terminal = Fail(LoginState.TimedOut, "二维码已超时，请重新获取二维码", QrLoginOutcome.TimedOut);
+                    break;
+                }
+
+                QrStatusResult status;
+                try
+                {
+                    status = await PollQrStatusAsync(session, publishState: false, cancellationToken).ConfigureAwait(false);
+                    consecutiveFailures = 0;
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // 单次请求超时：按一次失败处理，继续轮询（不中断整条流程）。
+                    _logger.LogWarning("扫码轮询单次请求超时（第 {Count} 次连续失败）", ++consecutiveFailures);
+                    if (consecutiveFailures >= MaxConsecutiveFailures)
+                    {
+                        terminal = Fail(LoginState.Failed, "网络异常，登录已中断，请稍后重试", QrLoginOutcome.NetworkFailed);
+                        break;
+                    }
+
+                    await DelayBeforeNextPollAsync(cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+                catch (HttpRequestException ex)
+                {
+                    _logger.LogWarning(ex, "扫码轮询请求失败（第 {Count} 次连续失败）", ++consecutiveFailures);
+                    if (consecutiveFailures >= MaxConsecutiveFailures)
+                    {
+                        terminal = Fail(LoginState.Failed, "网络异常，登录已中断，请稍后重试", QrLoginOutcome.NetworkFailed);
+                        break;
+                    }
+
+                    await DelayBeforeNextPollAsync(cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                progress?.Report(status);
+                _logger.LogDebug("扫码状态：{State}（原始码 {Raw}）", status.State, status.RawStatus);
+
+                switch (status.State)
+                {
+                    case LoginState.WaitingForScan:
+                        SetState(LoginState.WaitingForScan, status.Message, profile: null);
+                        break;
+
+                    case LoginState.WaitingForConfirm:
+                        SetState(LoginState.WaitingForConfirm, status.Message, profile: null);
+                        break;
+
+                    case LoginState.Expired:
+                        terminal = Fail(LoginState.Expired, status.Message, QrLoginOutcome.Expired);
+                        break;
+
+                    case LoginState.LoggedIn:
+                        terminal = await CompleteLoginAsync(session, status, cancellationToken).ConfigureAwait(false);
+                        break;
+
+                    default:
+                        // 未知状态码：不中断流程，等它自己走到已知状态或超时。
+                        _logger.LogWarning("扫码轮询遇到未预期状态码 {Raw}，继续轮询", status.RawStatus);
+                        SetState(LoginState.WaitingForScan, status.Message, profile: null);
+                        break;
+                }
+
+                if (terminal is null)
+                {
+                    await DelayBeforeNextPollAsync(cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            return terminal;
+        }
+        finally
+        {
+            _pollGate.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public void Logout()
+    {
+        ThrowIfDisposed();
+
+        // CookieContainer 没有公开的 Clear()，把已知域上的 Cookie 逐个置为过期即可等效清除。
+        foreach (var domain in new[] { "bilibili.com", ".bilibili.com", "passport.bilibili.com", "api.bilibili.com" })
+        {
+            foreach (Cookie cookie in _cookies.GetCookies(new Uri($"https://{domain.TrimStart('.')}")))
+            {
+                cookie.Expired = true;
+            }
+        }
+
+        ClearSession();
+        _logger.LogInformation("已登出并清除本地登录态");
+        SetState(LoginState.Idle, "已退出登录", profile: null);
+
+        var handler = LoggedOut;
+        if (handler is not null)
+        {
+            handler(this, new LoggedOutEventArgs());
+        }
+    }
+
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_disposed)
@@ -168,6 +373,305 @@ public sealed class BiliLoginService : IBiliLoginService
 
         _disposed = true;
         _http.Dispose();
+        _pollGate.Dispose();
+    }
+
+    /// <summary>
+    /// 单次状态查询。命中登录成功时抓取凭据并触发登录事件。
+    /// </summary>
+    /// <param name="session">扫码会话。</param>
+    /// <param name="publishState">
+    /// 是否把本次查询结果写入 <see cref="State"/> 并触发 <see cref="StateChanged"/>。
+    /// 循环轮询时传 <see langword="false"/>，由循环统一推进状态，避免"状态抖动"。
+    /// </param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private async Task<QrStatusResult> PollQrStatusAsync(
+        QrSession session,
+        bool publishState,
+        CancellationToken cancellationToken)
+    {
+        ThrowIfDisposed();
+
+        var path = $"/x/passport-login/web/qrcode/poll?qrcode_key={Uri.EscapeDataString(session.Key)}";
+
+        using var response = await SendAsync(
+            HttpMethod.Get,
+            new Uri(PassportOrigin + path),
+            LoginReferer,
+            cookieHeader: null,
+            PollRequestTimeout,
+            cancellationToken).ConfigureAwait(false);
+
+        // 登录成功时 B 站可能直接回 302（而不是 200 + code 0）：此时响应体是空的，
+        // 不能再去解析 JSON，只能从 Set-Cookie 判定成功。
+        var setCookies = ReadSetCookies(response);
+
+        QrStatusResult result;
+        if (IsRedirect(response.StatusCode))
+        {
+            _logger.LogDebug("轮询命中重定向（HTTP {Status}），按登录成功处理", (int)response.StatusCode);
+            if (PublishCredentials(setCookies) is null)
+            {
+                CaptureCredentialsFromCookieContainer();
+            }
+
+            result = new QrStatusResult(
+                LoginState.LoggedIn, RawSuccess, ResolveMessage(RawSuccess, null), CurrentCredentials);
+        }
+        else
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            using var document = ParseJson(body, path);
+            var outer = ReadApiResult(document.RootElement, path);
+
+            // 内层 data.code 才是扫码状态；外层 code 只表示接口调用是否成功。
+            var hasPayload = outer.Data is { } data && data.ValueKind == JsonValueKind.Object;
+            var payload = hasPayload ? outer.Data!.Value : default;
+
+            var rawStatus = hasPayload && TryGetInt(payload, "code", out var innerCode)
+                ? innerCode
+                : outer.Code == 0
+                    ? RawSuccess
+                    : outer.Code;
+
+            var message = ResolveMessage(rawStatus, hasPayload ? TryGetString(payload, "message") : outer.Message);
+            var state = MapState(rawStatus);
+
+            BiliLoginCredentials? credentials = null;
+            if (state == LoginState.LoggedIn)
+            {
+                // 200 + code 0 的路径：Cookie 同样在响应头里。
+                PublishCredentials(setCookies);
+                credentials = CurrentCredentials;
+            }
+
+            result = new QrStatusResult(state, rawStatus, message, credentials);
+        }
+
+        if (publishState)
+        {
+            switch (result.State)
+            {
+                case LoginState.LoggedIn:
+                    SetState(LoginState.LoggedIn, result.Message, profile: null);
+                    break;
+                case LoginState.Expired:
+                    SetState(LoginState.Expired, result.Message, profile: null);
+                    break;
+                case LoginState.WaitingForConfirm:
+                    SetState(LoginState.WaitingForConfirm, result.Message, profile: null);
+                    break;
+                default:
+                    SetState(LoginState.WaitingForScan, result.Message, profile: null);
+                    break;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 登录成功后的收尾：确保凭据已落地、触发登录事件。
+    /// </summary>
+    /// <param name="session">扫码会话。</param>
+    /// <param name="status">判定为登录成功的那次状态查询结果。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>终局结果。</returns>
+    private Task<QrLoginResult> CompleteLoginAsync(
+        QrSession session,
+        QrStatusResult status,
+        CancellationToken cancellationToken)
+    {
+        _ = cancellationToken;
+
+        // 同一个 key 只完成一次：重入的轮询不该重复触发登录事件。
+        if (_processedKeys.Contains(session.Key))
+        {
+            var existing = CurrentCredentials;
+            return Task.FromResult(existing is null
+                ? new QrLoginResult(QrLoginOutcome.Expired, null, null, "该二维码已使用，请重新获取")
+                : new QrLoginResult(QrLoginOutcome.Succeeded, existing, null, "登录成功"));
+        }
+
+        _processedKeys.Enqueue(session.Key);
+
+        // 302 路径下 Set-Cookie 一定存在；兜底的是"响应头没给、但 Cookie 容器已持有"的特殊情况。
+        BiliLoginCredentials? credentials = status.Credentials ?? CurrentCredentials;
+        credentials ??= CaptureCredentialsFromCookieContainer();
+
+        if (credentials is null || !credentials.IsComplete)
+        {
+            // 302 路径下 Set-Cookie 一定存在；这是"容器与响应头都没拿到"的异常兜底。
+            _logger.LogError("扫码成功但未能解析出登录 Cookie（响应缺少 Set-Cookie？）");
+            return Task.FromResult(
+                Fail(LoginState.Failed, "登录失败：未能获取登录凭据，请重试", QrLoginOutcome.NetworkFailed));
+        }
+
+        lock (_gate)
+        {
+            _credentials = credentials;
+        }
+
+        _logger.LogInformation("扫码登录成功");
+        SetState(LoginState.LoggedIn, "登录成功", profile: null);
+        RaiseLoginSucceeded(credentials, profile: null);
+
+        return Task.FromResult(new QrLoginResult(QrLoginOutcome.Succeeded, credentials, null, "登录成功"));
+    }
+
+    /// <summary>
+    /// 构造一个失败终局并把状态推进到对应终态（状态与事件通知只在这一处发生）。
+    /// </summary>
+    /// <param name="state">要推进到的终态。</param>
+    /// <param name="message">面向用户的说明文本。</param>
+    /// <param name="outcome">终局类型。</param>
+    /// <returns>终局结果。</returns>
+    private QrLoginResult Fail(LoginState state, string message, QrLoginOutcome outcome)
+    {
+        SetState(state, message, profile: null);
+        return new QrLoginResult(outcome, null, null, message);
+    }
+
+    /// <summary>
+    /// 从响应的 <c>Set-Cookie</c> 中抽取凭据并写入 Cookie 容器。
+    /// </summary>
+    /// <param name="setCookies">响应携带的 Set-Cookie 原始值。</param>
+    /// <returns>三个关键 Cookie 齐备时返回凭据，否则返回 <see langword="null"/>。</returns>
+    private BiliLoginCredentials? PublishCredentials(IReadOnlyList<string> setCookies)
+    {
+        if (setCookies.Count == 0)
+        {
+            return null;
+        }
+
+        var pairs = new List<KeyValuePair<string, string>>();
+        foreach (var raw in setCookies)
+        {
+            var pair = SplitSetCookie(raw);
+            if (pair is { } kv)
+            {
+                pairs.Add(kv);
+                SetCookie(kv.Key, kv.Value);
+            }
+        }
+
+        return BuildCredentials(pairs);
+    }
+
+    /// <summary>
+    /// 兜底路径：Cookie 容器里已经有 Cookie（例如容器被复用），直接从中取凭据。
+    /// </summary>
+    /// <returns>三个关键 Cookie 齐备时返回凭据，否则返回 <see langword="null"/>。</returns>
+    private BiliLoginCredentials? CaptureCredentialsFromCookieContainer()
+    {
+        var cookieHeader = _cookies.GetCookieHeader(new Uri(ApiOrigin));
+        if (string.IsNullOrEmpty(cookieHeader))
+        {
+            return null;
+        }
+
+        return BuildCredentials(ParseCookiePairs(cookieHeader));
+    }
+
+    /// <summary>
+    /// 依据 Cookie 键值对组装凭据。
+    /// </summary>
+    /// <param name="pairs">Cookie 键值对。</param>
+    /// <returns>凭据；三个关键 Cookie 不齐备时返回 <see langword="null"/>。</returns>
+    private static BiliLoginCredentials? BuildCredentials(IReadOnlyList<KeyValuePair<string, string>> pairs)
+    {
+        var sessData = Find(pairs, "SESSDATA");
+        var biliJct = Find(pairs, "bili_jct");
+        var dedeUserId = Find(pairs, "DedeUserID");
+
+        if (string.IsNullOrEmpty(sessData) || string.IsNullOrEmpty(biliJct) || string.IsNullOrEmpty(dedeUserId))
+        {
+            return null;
+        }
+
+        var header = string.Join("; ", pairs.Select(p => $"{p.Key}={p.Value}"));
+
+        return new BiliLoginCredentials(sessData, biliJct, dedeUserId, header);
+
+        static string Find(IReadOnlyList<KeyValuePair<string, string>> source, string name)
+            => source.FirstOrDefault(p => string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase)).Value ?? string.Empty;
+    }
+
+    /// <summary>
+    /// 解析单个 <c>Set-Cookie</c> 头的 <c>name=value</c> 部分（value 中可能含 <c>=</c>）。
+    /// </summary>
+    /// <param name="setCookie">Set-Cookie 原始值。</param>
+    /// <returns>首个键值对；无法解析时返回 <see langword="null"/>。</returns>
+    private static KeyValuePair<string, string>? SplitSetCookie(string setCookie)
+    {
+        var firstSegment = setCookie.Split(';')[0];
+        var separator = firstSegment.IndexOf('=');
+        if (separator <= 0)
+        {
+            return null;
+        }
+
+        var name = firstSegment[..separator].Trim();
+        var value = firstSegment[(separator + 1)..].Trim();
+        return name.Length == 0 ? null : new KeyValuePair<string, string>(name, value);
+    }
+
+    /// <summary>
+    /// 解析 Cookie 头为键值对。
+    /// </summary>
+    /// <param name="cookieHeader">形如 <c>a=1; b=2</c> 的 Cookie 头。</param>
+    /// <returns>键值对列表。</returns>
+    private static List<KeyValuePair<string, string>> ParseCookiePairs(string cookieHeader)
+    {
+        var pairs = new List<KeyValuePair<string, string>>();
+
+        foreach (var segment in cookieHeader.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = segment.IndexOf('=');
+            if (separator <= 0)
+            {
+                continue;
+            }
+
+            pairs.Add(new KeyValuePair<string, string>(segment[..separator].Trim(), segment[(separator + 1)..].Trim()));
+        }
+
+        return pairs;
+    }
+
+    /// <summary>
+    /// 把 Cookie 写入容器。域名统一用 <c>bilibili.com</c>：容器会自行派生到各个子域，
+    /// 而带 <c>passport.bilibili.com</c> 域的 Cookie 不会发往 <c>api.bilibili.com</c>。
+    /// </summary>
+    /// <param name="name">Cookie 名。</param>
+    /// <param name="value">Cookie 值。</param>
+    private void SetCookie(string name, string value)
+    {
+        try
+        {
+            _cookies.Add(new Cookie(name, value, "/", "bilibili.com"));
+        }
+        catch (CookieException ex)
+        {
+            _logger.LogWarning(ex, "Cookie {Name} 格式非法，已跳过", name);
+        }
+    }
+
+    /// <summary>
+    /// 读取响应中的全部 <c>Set-Cookie</c>。
+    /// </summary>
+    /// <param name="response">HTTP 响应。</param>
+    /// <returns>Set-Cookie 原始值列表。</returns>
+    private static List<string> ReadSetCookies(HttpResponseMessage response)
+    {
+        var result = new List<string>();
+        if (response.Headers.TryGetValues("Set-Cookie", out var values))
+        {
+            result.AddRange(values);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -204,6 +708,13 @@ public sealed class BiliLoginService : IBiliLoginService
         return await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeoutSource.Token)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// 延迟到下一次轮询；延迟期间响应取消。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private static Task DelayBeforeNextPollAsync(CancellationToken cancellationToken)
+        => Task.Delay(PollInterval, cancellationToken);
 
     /// <summary>
     /// 把响应体读成 <see cref="JsonDocument"/>；内容不是合法 JSON 时抛出业务异常（而不是让 <c>JsonException</c> 冒到 UI）。
@@ -298,6 +809,51 @@ public sealed class BiliLoginService : IBiliLoginService
             : null;
 
     /// <summary>
+    /// 把状态码映射为登录状态。未知码按"等待扫码"处理（继续轮询），不会误判为成功或失效。
+    /// </summary>
+    /// <param name="rawStatus">B 站原始状态码。</param>
+    /// <returns>归一化状态。</returns>
+    private static LoginState MapState(int rawStatus) => rawStatus switch
+    {
+        RawSuccess => LoginState.LoggedIn,
+        RawNotConfirmed => LoginState.WaitingForConfirm,
+        RawExpired => LoginState.Expired,
+        RawNotScanned => LoginState.WaitingForScan,
+        _ => LoginState.WaitingForScan,
+    };
+
+    /// <summary>
+    /// 生成面向用户的提示文本：优先用接口返回的 message，为空时（B 站常返回 "0"）按状态码兜底。
+    /// </summary>
+    /// <param name="rawStatus">B 站原始状态码。</param>
+    /// <param name="message">接口返回的提示文本，可为空。</param>
+    /// <returns>可直接展示的纯文本。</returns>
+    private static string ResolveMessage(int rawStatus, string? message)
+    {
+        var cleaned = string.IsNullOrWhiteSpace(message) ? string.Empty : HtmlResidue.Replace(message, " ").Trim();
+
+        return cleaned.Length == 0 || cleaned == "0"
+            ? rawStatus switch
+            {
+                RawNotScanned => "请使用哔哩哔哩手机客户端扫描二维码",
+                RawNotConfirmed => "扫码成功，请在手机上确认登录",
+                RawSuccess => "登录成功",
+                RawExpired => "二维码已失效，请重新获取",
+                _ => $"未知状态（{rawStatus}）",
+            }
+            : cleaned;
+    }
+
+    /// <summary>
+    /// 判断状态码是否属于重定向（登录成功的另一种表现形态）。
+    /// </summary>
+    /// <param name="statusCode">HTTP 状态码。</param>
+    /// <returns>是重定向时为 <see langword="true"/>。</returns>
+    private static bool IsRedirect(HttpStatusCode statusCode)
+        => statusCode is HttpStatusCode.MovedPermanently or HttpStatusCode.Found
+            or HttpStatusCode.SeeOther or HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect;
+
+    /// <summary>
     /// 更新状态并在发生变化时触发 <see cref="StateChanged"/>。
     /// </summary>
     /// <param name="state">新状态。</param>
@@ -305,17 +861,51 @@ public sealed class BiliLoginService : IBiliLoginService
     /// <param name="profile">用户信息。</param>
     private void SetState(LoginState state, string message, BiliUserProfile? profile)
     {
+        var text = string.IsNullOrWhiteSpace(message) ? ResolveMessage(-1, null) : message;
+
         lock (_gate)
         {
             _state = state;
         }
 
-        _logger.LogInformation("登录状态 → {State}：{Message}", state, message);
+        if (state is LoginState.Idle)
+        {
+            _logger.LogDebug("登录状态 → {State}", state);
+        }
+        else
+        {
+            _logger.LogInformation("登录状态 → {State}：{Message}", state, text);
+        }
 
         var handler = StateChanged;
         if (handler is not null)
         {
-            handler(this, new LoginStateChangedEventArgs(state, message, profile));
+            handler(this, new LoginStateChangedEventArgs(state, text, profile));
+        }
+    }
+
+    /// <summary>
+    /// 触发登录成功事件。
+    /// </summary>
+    /// <param name="credentials">本次登录取得的凭据。</param>
+    /// <param name="profile">用户信息。</param>
+    private void RaiseLoginSucceeded(BiliLoginCredentials credentials, BiliUserProfile? profile)
+    {
+        var handler = LoginSucceeded;
+        if (handler is not null)
+        {
+            handler(this, new LoginSucceededEventArgs(credentials, profile));
+        }
+    }
+
+    /// <summary>
+    /// 清空内存中的登录态（凭据与用户信息）。
+    /// </summary>
+    private void ClearSession()
+    {
+        lock (_gate)
+        {
+            _credentials = null;
         }
     }
 

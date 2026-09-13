@@ -34,8 +34,27 @@ public interface IBiliLoginService : IDisposable
     /// </remarks>
     event EventHandler<LoginStateChangedEventArgs>? StateChanged;
 
+    /// <summary>
+    /// 登录成功（已拿到 Cookie）时触发，便于 UI 执行"登录后"动作。
+    /// </summary>
+    /// <remarks>
+    /// 触发时 <see cref="CurrentCredentials"/> 必定非空。
+    /// </remarks>
+    event EventHandler<LoginSucceededEventArgs>? LoginSucceeded;
+
+    /// <summary>
+    /// 登出完成时触发；UI 应清空头像、昵称等展示状态。
+    /// </summary>
+    event EventHandler<LoggedOutEventArgs>? LoggedOut;
+
     /// <summary>最近一次已知的登录状态。</summary>
     LoginState State { get; }
+
+    /// <summary>当前登录凭据；未登录时为 <see langword="null"/>。</summary>
+    BiliLoginCredentials? CurrentCredentials { get; }
+
+    /// <summary>是否处于已登录状态（<see cref="CurrentCredentials"/> 非空）。</summary>
+    bool IsLoggedIn { get; }
 
     /// <summary>
     /// 第一步：向 B 站申请一个登录二维码。
@@ -52,12 +71,101 @@ public interface IBiliLoginService : IDisposable
     Task<QrSession> CreateQrSessionAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 第二步：查询一次扫码状态（单次轮询，不含内部循环）。
+    /// </summary>
+    /// <param name="session">由 <see cref="CreateQrSessionAsync"/> 返回的会话。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>
+    /// 本次查询结果。状态取自响应<b>内层</b>的 <c>data.code</c>
+    /// （外层 <c>code</c> 只表示接口调用是否成功，读错层会永远停在"未扫码"）。
+    /// 接口返回的未知状态码会被原样保留在 <see cref="QrStatusResult.RawStatus"/> 中而不抛异常，仅记录日志。
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> 为 <see langword="null"/>。</exception>
+    /// <exception cref="HttpRequestException">网络层失败。</exception>
+    /// <exception cref="TaskCanceledException">请求超时或被取消。</exception>
+    Task<QrStatusResult> PollQrStatusAsync(QrSession session, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 第三步（推荐入口）：轮询扫码状态直到出现终态，成功后自动落地凭据。
+    /// </summary>
+    /// <param name="session">由 <see cref="CreateQrSessionAsync"/> 返回的会话。</param>
+    /// <param name="progress">可选的进度回调，每次状态变化时报告一次（UI 可据此提示"已扫码，请在手机上确认"）。</param>
+    /// <param name="cancellationToken">取消令牌；用户关闭登录界面时必须取消。</param>
+    /// <returns>
+    /// 轮询终局。仅当 <see cref="QrLoginResult.Outcome"/> 为 <see cref="QrLoginOutcome.Succeeded"/> 时
+    /// <see cref="QrLoginResult.Credentials"/> 才非空。
+    /// 返回 <see cref="QrLoginOutcome.TimedOut"/> 或 <see cref="QrLoginOutcome.NetworkFailed"/> 时，
+    /// 会话可能仍然有效，UI 可提示用户后重新调用本方法续等（不必重新取码）。
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="session"/> 为 <see langword="null"/>。</exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> 已被取消（<b>不</b>吞掉取消：取消是正常出口，由调用方决定如何处理）。
+    /// </exception>
+    Task<QrLoginResult> WaitForConfirmationAsync(
+        QrSession session,
+        IProgress<QrStatusResult>? progress = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 登出：清除本地 Cookie 与内存中的登录态，并触发 <see cref="LoggedOut"/>。
+    /// </summary>
+    /// <remarks>
+    /// 本方法<b>只做本地清理</b>：不调用 B 站登出接口，不影响其它设备的登录状态。
+    /// 若持久化过凭据，调用方必须同时删除持久化副本。
+    /// </remarks>
+    void Logout();
+
+    /// <summary>
     /// 一次扫码登录会话。
     /// </summary>
     /// <param name="Key">轮询凭据（<c>qrcode_key</c>），业务层已保管，UI 一般不需要使用。</param>
     /// <param name="Content">二维码内容字符串，需由 UI 渲染成二维码图片。</param>
     /// <param name="ExpiresAt">本地推算的失效时刻（B 站二维码有效期约 3 分钟），UI 可用于画倒计时/进度。</param>
     public sealed record QrSession(string Key, string Content, DateTimeOffset ExpiresAt);
+
+    /// <summary>
+    /// 一次扫码状态查询的结果。
+    /// </summary>
+    /// <param name="State">归一化后的状态。</param>
+    /// <param name="RawStatus">B 站原始状态码（<c>data.code</c>），未知状态时保留原值便于排查。</param>
+    /// <param name="Message">接口返回的提示文本（已剥除 <c>&amp;nbsp;</c> 等 HTML 残留），可直接展示。</param>
+    /// <param name="Credentials">仅当本次查询即登录成功时非空。</param>
+    public sealed record QrStatusResult(
+        LoginState State,
+        int RawStatus,
+        string Message,
+        BiliLoginCredentials? Credentials);
+
+    /// <summary>
+    /// 轮询的终局结果。
+    /// </summary>
+    /// <param name="Outcome">终局类型。</param>
+    /// <param name="Credentials">仅登录成功时非空。</param>
+    /// <param name="Profile">用户信息，本阶段尚不抓取（恒为 <see langword="null"/>）。</param>
+    /// <param name="Message">面向用户的说明文本。</param>
+    public sealed record QrLoginResult(
+        QrLoginOutcome Outcome,
+        BiliLoginCredentials? Credentials,
+        BiliUserProfile? Profile,
+        string Message);
+
+    /// <summary>
+    /// 轮询可能的终局类型。
+    /// </summary>
+    public enum QrLoginOutcome
+    {
+        /// <summary>登录成功，已拿到 Cookie。</summary>
+        Succeeded,
+
+        /// <summary>二维码已失效，必须重新调用 <see cref="CreateQrSessionAsync"/> 取新码。</summary>
+        Expired,
+
+        /// <summary>超过二维码有效期（约 3 分钟）仍未完成扫码，本地兜底退出。</summary>
+        TimedOut,
+
+        /// <summary>连续网络失败达到上限，会话可能仍有效，可提示用户后重试。</summary>
+        NetworkFailed,
+    }
 
     /// <summary>
     /// 登录状态机（UI 渲染依据）。
@@ -69,6 +177,44 @@ public interface IBiliLoginService : IDisposable
 
         /// <summary>已取到二维码，等待用户扫码。</summary>
         WaitingForScan,
+
+        /// <summary>用户已扫码，等待其在手机上点击确认。</summary>
+        WaitingForConfirm,
+
+        /// <summary>登录成功，凭据已就绪。</summary>
+        LoggedIn,
+
+        /// <summary>二维码失效，需重新取码。</summary>
+        Expired,
+
+        /// <summary>等待超时，需重新取码。</summary>
+        TimedOut,
+
+        /// <summary>网络连续失败导致流程中断。</summary>
+        Failed,
+    }
+
+    /// <summary>
+    /// 登录成功后可用的凭据（与写操作所需的 CSRF 令牌）。
+    /// </summary>
+    /// <param name="SessData">登录凭据，等价于账号登录态，<b>必须加密存储</b>。</param>
+    /// <param name="BiliJct">CSRF 令牌，所有写操作（点赞/收藏等）需作为 <c>csrf</c> 参数提交。</param>
+    /// <param name="DedeUserId">当前用户 <c>mid</c>。</param>
+    /// <param name="CookieHeader">
+    /// 可直接用于请求的 Cookie 头（B 站返回的全部 Set-Cookie 原样拼接）。
+    /// 仅在与 B 站域名通信时附加，禁止拼进 URL、禁止整体写日志。
+    /// </param>
+    public sealed record BiliLoginCredentials(
+        string SessData,
+        string BiliJct,
+        string DedeUserId,
+        string CookieHeader)
+    {
+        /// <summary>三个关键 Cookie 是否齐备（齐备即可判定为已登录）。</summary>
+        public bool IsComplete =>
+            !string.IsNullOrEmpty(SessData) &&
+            !string.IsNullOrEmpty(BiliJct) &&
+            !string.IsNullOrEmpty(DedeUserId);
     }
 
     /// <summary>
@@ -103,6 +249,25 @@ public interface IBiliLoginService : IDisposable
         /// <summary>已登录时携带用户信息。</summary>
         public BiliUserProfile? Profile { get; } = Profile;
     }
+
+    /// <summary>
+    /// 登录成功事件参数。
+    /// </summary>
+    /// <param name="Credentials">本次登录取得的凭据。</param>
+    /// <param name="Profile">用户信息，本阶段尚不抓取（恒为 <see langword="null"/>）。</param>
+    public sealed class LoginSucceededEventArgs(BiliLoginCredentials Credentials, BiliUserProfile? Profile) : EventArgs
+    {
+        /// <summary>本次登录取得的凭据。</summary>
+        public BiliLoginCredentials Credentials { get; } = Credentials;
+
+        /// <summary>用户信息（昵称、头像）。</summary>
+        public BiliUserProfile? Profile { get; } = Profile;
+    }
+
+    /// <summary>
+    /// 登出事件参数。
+    /// </summary>
+    public sealed class LoggedOutEventArgs : EventArgs;
 
     /// <summary>
     /// B 站接口返回非 0 业务码时抛出。

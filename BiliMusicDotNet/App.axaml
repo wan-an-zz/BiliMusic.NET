@@ -1,13 +1,10 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="using:BiliMusicDotNet"
              x:Class="BiliMusicDotNet.App"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
-    <Application.DataTemplates>
-        <local:ViewLocator/>
-    </Application.DataTemplates>
+    <!-- 视图定位器由 App 启动时从容器取得并挂到 DataTemplates，见 App.axaml.cs。 -->
 
     <Application.Styles>
         <FluentTheme />

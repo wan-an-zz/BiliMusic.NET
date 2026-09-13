@@ -14,6 +14,14 @@ namespace BiliMusicDotNet;
     Url = "https://docs.avaloniaui.net/docs/concepts/view-locator")]
 public class ViewLocator : IDataTemplate
 {
+    private readonly IServiceProvider _services;
+
+    /// <summary>
+    /// 创建视图定位器。
+    /// </summary>
+    /// <param name="services">用于解析视图的容器（组合根）。</param>
+    public ViewLocator(IServiceProvider services) => _services = services;
+
     public Control? Build(object? param)
     {
         if (param is null)
@@ -22,16 +30,21 @@ public class ViewLocator : IDataTemplate
         var name = param.GetType().FullName!.Replace("ViewModel", "View", StringComparison.Ordinal);
         var type = Type.GetType(name);
 
-        if (type != null)
-        {
-            return (Control)Activator.CreateInstance(type)!;
-        }
+        if (type is null)
+            return NotFound(name);
 
-        return new TextBlock { Text = "Not Found: " + name };
+        // 优先交给容器创建：视图同样享有构造函数注入。
+        if (_services.GetService(type) is Control registered)
+            return registered;
+
+        // 兜底：未注册到容器的视图仍按无参构造创建，保持模板原有行为。
+        return Activator.CreateInstance(type) as Control ?? NotFound(name);
     }
 
     public bool Match(object? data)
     {
         return data is ViewModelBase;
     }
+
+    private static TextBlock NotFound(string name) => new() { Text = "Not Found: " + name };
 }

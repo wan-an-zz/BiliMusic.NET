@@ -53,6 +53,9 @@ public sealed class BiliLoginService : IBiliLoginService
     /// <summary>数据接口的域名（登录态查询 <c>nav</c> 在此域；凭据的 Cookie 域也以它为准）。</summary>
     private const string ApiOrigin = "https://api.bilibili.com";
 
+    /// <summary>内容接口使用的 Referer。</summary>
+    private const string ContentReferer = "https://www.bilibili.com";
+
     /// <summary>现代桌面浏览器 UA：默认 UA 中包含的 "unknown" 特征容易被风控针对。</summary>
     private const string UserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
@@ -102,6 +105,7 @@ public sealed class BiliLoginService : IBiliLoginService
     private bool _disposed;
 
     private BiliLoginCredentials? _credentials;
+    private BiliUserProfile? _profile;
     private LoginState _state = LoginState.Idle;
 
     /// <summary>
@@ -178,6 +182,18 @@ public sealed class BiliLoginService : IBiliLoginService
 
     /// <inheritdoc />
     public bool IsLoggedIn => CurrentCredentials is not null;
+
+    /// <inheritdoc />
+    public BiliUserProfile? CurrentProfile
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _profile;
+            }
+        }
+    }
 
     /// <inheritdoc />
     public async Task<QrSession> CreateQrSessionAsync(CancellationToken cancellationToken = default)
@@ -339,6 +355,60 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <inheritdoc />
+    public async Task<BiliUserProfile?> GetProfileAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        var cookieHeader = _cookies.GetCookieHeader(new Uri(ApiOrigin));
+        if (string.IsNullOrEmpty(cookieHeader))
+        {
+            _logger.LogDebug("尚无登录 Cookie，跳过用户信息查询");
+            return null;
+        }
+
+        using var response = await SendAsync(
+            HttpMethod.Get,
+            new Uri(ApiOrigin + "/x/web-interface/nav"),
+            ContentReferer,
+            cookieHeader,
+            PollRequestTimeout,
+            cancellationToken).ConfigureAwait(false);
+
+        using var document = await ReadJsonAsync(response, "/x/web-interface/nav", cancellationToken).ConfigureAwait(false);
+
+        // nav 是特例：未登录时返回 -101，但 data 仍可能带 wbi_img。此处只关心登录信息，
+        // 因此不能用"code != 0 即抛错"的统一封装。
+        var result = ReadApiResult(document.RootElement, "/x/web-interface/nav");
+        if (result.Code != 0)
+        {
+            _logger.LogWarning("用户信息查询失败：code={Code}，判定登录态失效", result.Code);
+            ClearSession();
+            SetState(LoginState.Expired, "登录已失效，请重新扫码登录", profile: null);
+            return null;
+        }
+
+        if (result.Data is not { } data || data.ValueKind != JsonValueKind.Object)
+        {
+            _logger.LogWarning("用户信息响应缺少 data 对象");
+            return null;
+        }
+
+        var profile = ReadProfile(data);
+        if (profile is null)
+        {
+            _logger.LogWarning("用户信息响应缺少 mid / uname 字段");
+            return null;
+        }
+
+        lock (_gate)
+        {
+            _profile = profile;
+        }
+
+        return profile;
+    }
+
+    /// <inheritdoc />
     public void Logout()
     {
         ThrowIfDisposed();
@@ -472,26 +542,24 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <summary>
-    /// 登录成功后的收尾：确保凭据已落地、触发登录事件。
+    /// 登录成功后的收尾：确保凭据已落地、抓取用户信息、触发登录事件。
     /// </summary>
     /// <param name="session">扫码会话。</param>
     /// <param name="status">判定为登录成功的那次状态查询结果。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>终局结果。</returns>
-    private Task<QrLoginResult> CompleteLoginAsync(
+    private async Task<QrLoginResult> CompleteLoginAsync(
         QrSession session,
         QrStatusResult status,
         CancellationToken cancellationToken)
     {
-        _ = cancellationToken;
-
         // 同一个 key 只完成一次：重入的轮询不该重复触发登录事件。
         if (_processedKeys.Contains(session.Key))
         {
             var existing = CurrentCredentials;
-            return Task.FromResult(existing is null
+            return existing is null
                 ? new QrLoginResult(QrLoginOutcome.Expired, null, null, "该二维码已使用，请重新获取")
-                : new QrLoginResult(QrLoginOutcome.Succeeded, existing, null, "登录成功"));
+                : new QrLoginResult(QrLoginOutcome.Succeeded, existing, CurrentProfile, "登录成功");
         }
 
         _processedKeys.Enqueue(session.Key);
@@ -504,8 +572,7 @@ public sealed class BiliLoginService : IBiliLoginService
         {
             // 302 路径下 Set-Cookie 一定存在；这是"容器与响应头都没拿到"的异常兜底。
             _logger.LogError("扫码成功但未能解析出登录 Cookie（响应缺少 Set-Cookie？）");
-            return Task.FromResult(
-                Fail(LoginState.Failed, "登录失败：未能获取登录凭据，请重试", QrLoginOutcome.NetworkFailed));
+            return Fail(LoginState.Failed, "登录失败：未能获取登录凭据，请重试", QrLoginOutcome.NetworkFailed);
         }
 
         lock (_gate)
@@ -513,11 +580,41 @@ public sealed class BiliLoginService : IBiliLoginService
             _credentials = credentials;
         }
 
-        _logger.LogInformation("扫码登录成功");
-        SetState(LoginState.LoggedIn, "登录成功", profile: null);
-        RaiseLoginSucceeded(credentials, profile: null);
+        // 资料接口失败不影响"登录已成立"这一事实：凭据已经拿到了。
+        BiliUserProfile? profile = null;
+        try
+        {
+            profile = await GetProfileAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "登录成功但用户信息拉取失败，UI 可稍后重试");
+        }
 
-        return Task.FromResult(new QrLoginResult(QrLoginOutcome.Succeeded, credentials, null, "登录成功"));
+        if (profile is null && !HasCredentials())
+        {
+            // GetProfileAsync 拿到 -101 时会判定登录态失效并清空凭据：此时不能对外宣称"登录成功"。
+            _logger.LogWarning("扫码已确认，但登录态校验未通过（nav 返回未登录）");
+            return Fail(LoginState.Expired, "登录未通过校验，请重新扫码", QrLoginOutcome.Expired);
+        }
+
+        _logger.LogInformation("扫码登录成功：mid={Mid}", profile?.Mid ?? 0);
+        SetState(LoginState.LoggedIn, "登录成功", profile);
+        RaiseLoginSucceeded(credentials, profile);
+
+        return new QrLoginResult(QrLoginOutcome.Succeeded, credentials, profile, "登录成功");
+    }
+
+    /// <summary>
+    /// 当前是否仍持有凭据（用于判断 <see cref="GetProfileAsync"/> 的失败是"网络问题"还是"登录态被判定失效"）。
+    /// </summary>
+    /// <returns>凭据仍存在时为 <see langword="true"/>。</returns>
+    private bool HasCredentials()
+    {
+        lock (_gate)
+        {
+            return _credentials is not null;
+        }
     }
 
     /// <summary>
@@ -798,6 +895,29 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <summary>
+    /// 读取长整数字段（<c>mid</c> 可能超出 int 范围，且接口偶尔以字符串下发）。
+    /// </summary>
+    /// <param name="element">父对象。</param>
+    /// <param name="name">字段名。</param>
+    /// <param name="value">读到的值。</param>
+    /// <returns>字段存在且是数字时为 <see langword="true"/>。</returns>
+    private static bool TryGetLong(JsonElement element, string name, out long value)
+    {
+        value = 0;
+        if (!element.TryGetProperty(name, out var property))
+        {
+            return false;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.Number => property.TryGetInt64(out value),
+            JsonValueKind.String => long.TryParse(property.GetString(), out value),
+            _ => false,
+        };
+    }
+
+    /// <summary>
     /// 读取字符串字段。
     /// </summary>
     /// <param name="element">父对象。</param>
@@ -842,6 +962,54 @@ public sealed class BiliLoginService : IBiliLoginService
                 _ => $"未知状态（{rawStatus}）",
             }
             : cleaned;
+    }
+
+    /// <summary>
+    /// 读取用户信息字段。
+    /// </summary>
+    /// <param name="data">nav 接口的 <c>data</c> 对象。</param>
+    /// <returns>用户信息；缺少关键字段时返回 <see langword="null"/>。</returns>
+    private static BiliUserProfile? ReadProfile(JsonElement data)
+    {
+        var mid = TryGetLong(data, "mid", out var parsedMid) ? parsedMid : 0;
+        var nickname = TryGetString(data, "uname");
+        if (mid <= 0 || string.IsNullOrEmpty(nickname))
+        {
+            return null;
+        }
+
+        var vipStatus = TryGetInt(data, "vipStatus", out var parsedVip) ? parsedVip : 0;
+
+        var level = 0;
+        if (data.TryGetProperty("level_info", out var levelInfo) &&
+            levelInfo.ValueKind == JsonValueKind.Object &&
+            TryGetInt(levelInfo, "current_level", out var currentLevel))
+        {
+            level = currentLevel;
+        }
+
+        return new BiliUserProfile(mid, nickname, ToHttpsUri(TryGetString(data, "face")), vipStatus == 1, level);
+    }
+
+    /// <summary>
+    /// 把 <c>//</c> 协议相对或 <c>http://</c> 地址统一升为 <c>https://</c>，避免混合内容被拦截。
+    /// </summary>
+    /// <param name="url">原始地址。</param>
+    /// <returns>绝对 https 地址；无法解析时返回 <see langword="null"/>。</returns>
+    private static Uri? ToHttpsUri(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        var normalized = url.StartsWith("//", StringComparison.Ordinal)
+            ? "https:" + url
+            : url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                ? "https://" + url["http://".Length..]
+                : url;
+
+        return Uri.TryCreate(normalized, UriKind.Absolute, out var uri) ? uri : null;
     }
 
     /// <summary>
@@ -906,6 +1074,7 @@ public sealed class BiliLoginService : IBiliLoginService
         lock (_gate)
         {
             _credentials = null;
+            _profile = null;
         }
     }
 

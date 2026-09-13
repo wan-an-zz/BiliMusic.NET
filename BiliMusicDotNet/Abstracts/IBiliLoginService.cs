@@ -35,10 +35,11 @@ public interface IBiliLoginService : IDisposable
     event EventHandler<LoginStateChangedEventArgs>? StateChanged;
 
     /// <summary>
-    /// 登录成功（已拿到 Cookie）时触发，便于 UI 执行"登录后"动作。
+    /// 登录成功（已拿到 Cookie 且已尝试抓取用户信息）时触发，便于 UI 执行"登录后"动作（刷新头像、进入主界面）。
     /// </summary>
     /// <remarks>
-    /// 触发时 <see cref="CurrentCredentials"/> 必定非空。
+    /// 触发时 <see cref="CurrentCredentials"/> 必定非空；<see cref="CurrentProfile"/> 可能为空
+    /// （资料接口临时失败不影响登录成立），UI 需允许空资料并自行重试 <see cref="GetProfileAsync"/>。
     /// </remarks>
     event EventHandler<LoginSucceededEventArgs>? LoginSucceeded;
 
@@ -52,6 +53,9 @@ public interface IBiliLoginService : IDisposable
 
     /// <summary>当前登录凭据；未登录时为 <see langword="null"/>。</summary>
     BiliLoginCredentials? CurrentCredentials { get; }
+
+    /// <summary>当前用户信息（昵称、头像地址等）；未抓到时为 <see langword="null"/>。</summary>
+    BiliUserProfile? CurrentProfile { get; }
 
     /// <summary>是否处于已登录状态（<see cref="CurrentCredentials"/> 非空）。</summary>
     bool IsLoggedIn { get; }
@@ -86,7 +90,7 @@ public interface IBiliLoginService : IDisposable
     Task<QrStatusResult> PollQrStatusAsync(QrSession session, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 第三步（推荐入口）：轮询扫码状态直到出现终态，成功后自动落地凭据。
+    /// 第三步（推荐入口）：轮询扫码状态直到出现终态，成功后自动抓取昵称与头像。
     /// </summary>
     /// <param name="session">由 <see cref="CreateQrSessionAsync"/> 返回的会话。</param>
     /// <param name="progress">可选的进度回调，每次状态变化时报告一次（UI 可据此提示"已扫码，请在手机上确认"）。</param>
@@ -105,6 +109,18 @@ public interface IBiliLoginService : IDisposable
         QrSession session,
         IProgress<QrStatusResult>? progress = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// 抓取当前登录用户的昵称、头像地址等信息（内部调用 <c>nav</c> 接口）。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>
+    /// 用户信息；未登录（接口返回 <c>-101</c>）或凭据已失效时返回 <see langword="null"/>，
+    /// 并同步把 <see cref="State"/> 置为 <see cref="LoginState.Expired"/>、清空凭据。
+    /// </returns>
+    /// <exception cref="HttpRequestException">网络层失败。</exception>
+    /// <exception cref="TaskCanceledException">请求超时或被取消。</exception>
+    Task<BiliUserProfile?> GetProfileAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 登出：清除本地 Cookie 与内存中的登录态，并触发 <see cref="LoggedOut"/>。

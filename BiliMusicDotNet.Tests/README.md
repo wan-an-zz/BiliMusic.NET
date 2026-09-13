@@ -13,7 +13,7 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 
 ```
 === TEST EXECUTION SUMMARY ===
-   BiliMusicDotNet.Tests  Total: 30, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
+   BiliMusicDotNet.Tests  Total: 32, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
 ```
 
 **提交前必须全绿（`Failed: 0` 且 `Errors: 0`）**，这是本仓库的提交闸门。
@@ -36,8 +36,10 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 | 测试文件 | 覆盖的子功能 |
 | --- | --- |
 | `QrSessionTests.cs` | 取码：请求特征、二维码内容/轮询凭据返回、业务码非 0、脏响应 |
-| `QrPollingTests.cs` | 轮询：内层状态码映射、**四种终止出口**、进度回调、失败容忍 |
-| `LoginSessionTests.cs` | 成功收尾：凭据落地、用户信息与头像、事件、恢复登录态、登出、释放语义 |
+| `QrPollingTests.cs` | 轮询：内层状态码映射、四种终止出口、进度回调、失败容忍 |
+| `UserProfileTests.cs` | 用户信息：字段解析、Cookie 域、资料接口失败容错、事件载荷 |
+| `AvatarTests.cs` | 头像下载：字节返回、CDN 所需 Referer、403 与网络异常 |
+| `SessionLifecycleTests.cs` | 登录态恢复、登出、资源释放 |
 
 关键回归点（都是"写错了不会崩、只会静默不对"的地方）：
 

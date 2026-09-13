@@ -1,4 +1,6 @@
+using BiliMusicDotNet.Abstracts;
 using BiliMusicDotNet.Logging;
+using BiliMusicDotNet.Services;
 using BiliMusicDotNet.ViewModels;
 using BiliMusicDotNet.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +26,9 @@ public static class ServiceCollectionExtensions
         // Views
         services.AddTransient<MainView>();
         services.AddTransient<MainWindow>();
+        
+        // Services
+        services.AddSingleton<IBiliLoginService, BiliLoginService>();
 
         return services;
     }

@@ -457,6 +457,46 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <inheritdoc />
+    public async Task<bool> TryRestoreSessionAsync(BiliLoginCredentials credentials, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(credentials);
+        ThrowIfDisposed();
+
+        if (!credentials.IsComplete)
+        {
+            _logger.LogWarning("恢复登录态失败：凭据不完整");
+            return false;
+        }
+
+        // 先让 Cookie 容器持有凭据，nav 才有机会返回 code 0。
+        foreach (var (name, value) in ParseCookiePairs(credentials.CookieHeader))
+        {
+            SetCookie(name, value);
+        }
+
+        SetCookie("SESSDATA", credentials.SessData);
+        SetCookie("bili_jct", credentials.BiliJct);
+        SetCookie("DedeUserID", credentials.DedeUserId);
+
+        lock (_gate)
+        {
+            _credentials = credentials;
+        }
+
+        var profile = await GetProfileAsync(cancellationToken).ConfigureAwait(false);
+        if (profile is null)
+        {
+            _logger.LogInformation("恢复登录态失败：凭据已失效");
+            return false;
+        }
+
+        _logger.LogInformation("已恢复登录态：mid={Mid}", profile.Mid);
+        SetState(LoginState.LoggedIn, "已自动登录", profile);
+        RaiseLoginSucceeded(credentials, profile);
+        return true;
+    }
+
+    /// <inheritdoc />
     public void Logout()
     {
         ThrowIfDisposed();

@@ -131,6 +131,15 @@ public interface IBiliLoginService : IDisposable
     Task<byte[]?> GetAvatarImageAsync(Uri? imageUri, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 校验并恢复一次既有登录态（典型场景：宿主层从加密存储里读回 Cookie 后调用）。
+    /// </summary>
+    /// <param name="credentials">待恢复的凭据。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>校验通过并成功取回用户信息时返回 <see langword="true"/>；否则返回 <see langword="false"/> 并清空登录态。</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="credentials"/> 为 <see langword="null"/>。</exception>
+    Task<bool> TryRestoreSessionAsync(BiliLoginCredentials credentials, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 登出：清除本地 Cookie 与内存中的登录态，并触发 <see cref="LoggedOut"/>。
     /// </summary>
     /// <remarks>
@@ -165,7 +174,7 @@ public interface IBiliLoginService : IDisposable
     /// </summary>
     /// <param name="Outcome">终局类型。</param>
     /// <param name="Credentials">仅登录成功时非空。</param>
-    /// <param name="Profile">用户信息，本阶段尚不抓取（恒为 <see langword="null"/>）。</param>
+    /// <param name="Profile">仅登录成功时非空，且资料接口可能失败（此时为 <see langword="null"/>）。</param>
     /// <param name="Message">面向用户的说明文本。</param>
     public sealed record QrLoginResult(
         QrLoginOutcome Outcome,
@@ -278,7 +287,7 @@ public interface IBiliLoginService : IDisposable
     /// 登录成功事件参数。
     /// </summary>
     /// <param name="Credentials">本次登录取得的凭据。</param>
-    /// <param name="Profile">用户信息，本阶段尚不抓取（恒为 <see langword="null"/>）。</param>
+    /// <param name="Profile">用户信息；资料接口失败时为 <see langword="null"/>。</param>
     public sealed class LoginSucceededEventArgs(BiliLoginCredentials Credentials, BiliUserProfile? Profile) : EventArgs
     {
         /// <summary>本次登录取得的凭据。</summary>

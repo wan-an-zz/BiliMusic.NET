@@ -1,3 +1,4 @@
+using BiliMusicDotNet.Logging;
 using BiliMusicDotNet.ViewModels;
 using BiliMusicDotNet.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,12 +25,15 @@ namespace BiliMusicDotNet.DependencyInjection;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// 注册应用运行所需的视图模型、视图与视图定位器。
+    /// 注册应用运行所需的日志、视图模型、视图与视图定位器。
     /// </summary>
     /// <param name="services">待填充的服务集合。</param>
     /// <returns>同一个 <paramref name="services"/>，便于链式调用。</returns>
     public static IServiceCollection AddBiliMusicDotNet(this IServiceCollection services)
     {
+        // 日志：ILogger<T> 经 NLog 输出，级别过滤由 nlog.config 统一决定。
+        services.AddAppLogging();
+
         // 视图定位器：无状态，作为数据模板长期存活。
         services.AddSingleton<ViewLocator>();
 

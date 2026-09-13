@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Avalonia;
 
 namespace BiliMusicDotNet.Desktop;
@@ -19,6 +19,5 @@ sealed class Program
 #if DEBUG
             .WithDeveloperTools()
 #endif
-            .WithInterFont()
-            .LogToTrace();
+            .WithInterFont();
 }

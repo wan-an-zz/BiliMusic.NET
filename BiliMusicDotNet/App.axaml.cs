@@ -3,8 +3,10 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using BiliMusicDotNet.DependencyInjection;
+using BiliMusicDotNet.Logging;
 using BiliMusicDotNet.Views;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace BiliMusicDotNet;
 
@@ -19,6 +21,10 @@ public partial class App : Application
 
     public override void Initialize()
     {
+        // 先把日志管道建好（含 Avalonia 内部日志转发），再加载 XAML，启动过程的日志才不会丢。
+        NLogSetup.Initialize();
+        Avalonia.Logging.Logger.Sink = new NLogSink(NLogSetup.LogFactory);
+
         AvaloniaXamlLoader.Load(this);
     }
 
@@ -40,6 +46,10 @@ public partial class App : Application
         {
             singleViewPlatform.MainView = Services.GetRequiredService<MainView>();
         }
+
+        Services.GetRequiredService<ILogger<App>>()
+            .LogInformation("应用启动完成，主视图已创建（生命周期：{Lifetime}）",
+                ApplicationLifetime?.GetType().Name ?? "未知");
 
         base.OnFrameworkInitializationCompleted();
     }

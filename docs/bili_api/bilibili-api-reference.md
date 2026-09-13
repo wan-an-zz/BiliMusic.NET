@@ -693,6 +693,121 @@ if (isRedirect && setCookies.length) {
 
 清除 `SESSDATA`、`bili_jct`、`DedeUserID`、`DedeUserID__ckMd5` 四个 Cookie 即可。浏览器跨域场景无法直接清除 `bilibili.com` 的 Cookie，需要走 B 站的登出接口或由宿主环境代为清除。
 
+### 7.5 轮询节奏与终止条件
+
+`poll` 是**公共的未认证端点**（无 WBI 签名、无 `appkey`），按契约正常调用即可；但它的调用特征是"短时间内反复请求"，节奏失控会明显偏离正常客户端。建议参数：
+
+| 项 | 建议值 |
+| --- | --- |
+| 轮询间隔 | **1.5 ~ 2 秒**（不要低于 1 秒） |
+| 二维码有效期 | 约 3 分钟 |
+| 全程请求次数 | 约 90 ~ 120 次（正常量级） |
+| 单次请求超时 | 10 秒左右，超时按一次失败处理而非中断整个流程 |
+| 连续失败容忍 | 少量网络抖动应重试而非直接放弃轮询 |
+
+**状态机**：`86101` → `86090` → `0`，任一环节都可能跳到 `86038`。
+
+| `status` | 含义 | 动作 |
+| --- | --- | --- |
+| `86101` / `86100` | 未扫码 | 继续轮询 |
+| `86090` | 已扫码，待确认 | 继续轮询（UI 提示"已在手机确认"） |
+| `0` | **登录成功** | **立即停止轮询**，处理 302 与 `Set-Cookie`（见 [7.3](#73-cookie-落地)） |
+| `86038` | 二维码已失效 | **立即停止轮询**，提示用户重新取值 |
+| 其它未知值 | 未预期状态 | 继续轮询，但记录日志 |
+
+**必须保证终止的四种出口**，缺一不可：
+
+1. `status === 0` —— 成功
+2. `status === 86038` —— 失效
+3. **用户主动取消 / 关闭登录界面** —— 通过 `CancellationToken` 一类机制通知轮询循环退出
+4. **达到有效期上限**（约 3 分钟）的兜底超时 —— 即使一次 `86038` 都没收到，也必须退出
+
+第 3 条最容易被漏掉：轮询循环若挂在无法取消的任务里，用户关掉界面后它仍会继续请求到有效期结束。
+
+参考实现（终止条件显式化）：
+
+```js
+async function pollUntilDone(key, { intervalMs = 1800, maxMs = 180000, signal } = {}) {
+  const deadline = Date.now() + maxMs
+
+  while (true) {
+    if (signal?.aborted) return { ok: false, reason: 'cancelled' }   // 出口 3
+    if (Date.now() > deadline) return { ok: false, reason: 'timeout' } // 出口 4
+
+    let status
+    try {
+      const resp = await fetchPoll(key, { signal })
+      if (resp.httpStatus === 301 || resp.httpStatus === 302) {
+        return { ok: true, cookies: resp.setCookies }                // 出口 1
+      }
+      status = resp.body?.data?.code ?? resp.body?.code
+    } catch (e) {
+      if (signal?.aborted) return { ok: false, reason: 'cancelled' }
+      await sleep(intervalMs, signal)   // 网络抖动：按一次失败处理，继续轮询
+      continue
+    }
+
+    if (status === 0) return { ok: true }                            // 出口 1
+    if (status === 86038) return { ok: false, reason: 'expired' }     // 出口 2
+
+    await sleep(intervalMs, signal)
+  }
+}
+
+const sleep = (ms, signal) => new Promise((resolve) => {
+  const onAbort = () => { clearTimeout(t); resolve() }
+  const t = setTimeout(() => {
+    signal?.removeEventListener('abort', onAbort)  // 正常超时后摘掉监听，避免泄漏
+    resolve()
+  }, ms)
+  signal?.addEventListener('abort', onAbort, { once: true })
+})
+```
+
+> **不建议把间隔压到 1 秒以下**：`poll` 本身不取内容数据，但没有必要用高频请求换取用户几乎感知不到的一两秒差异，而这个请求特征本身是可避免的。
+>
+> `qrcode_key` 与二维码一一对应，同一 `key` 不要并发轮询。
+
+### 7.6 会话持久化与安全
+
+登录成功后 `Set-Cookie` 中的 `SESSDATA` **等价于账号登录态**（配合 `bili_jct` 可执行写操作）。持久化策略属于安全责任，请勿省略。
+
+**1. 存储必须加密**
+
+不要把 `SESSDATA` 以明文写入配置文件、JSON、注册表或日志。按平台选择系统提供的凭据保护机制：
+
+| 平台 | 推荐机制 |
+| --- | --- |
+| Windows | DPAPI（`ProtectedData`）、Windows Credential Manager |
+| macOS | Keychain |
+| Linux | Secret Service / libsecret（无桌面环境时退化为用户态受限权限文件） |
+| 浏览器扩展 | `chrome.storage.session` 或宿主页面的加密存储 |
+
+**2. 读写与传输的最小暴露**
+
+- 仅在与 B 站域名通信时才附加该 Cookie，避免随其它请求外发
+- 不要把 Cookie 拼进 URL（会进日志、进 Referer、进浏览器历史）
+- 不要在日志、崩溃报告、遥测中输出其值（如需排查，只输出长度或哈希前缀）
+- 撤销/过期后立即从存储中删除，不要留作"备用"
+
+**3. 过期检测**
+
+`nav` 返回 **`code: -101`** 即表示会话已失效（注意 `nav` 是特例：不能复用"`code !== 0` 即抛错"的统一封装，见 [8.3](#83-通用封装) 的说明）。
+
+- 主动检测：启动时调一次 `nav`，或定时低频校验
+- 被动检测：任意接口返回 `-101` 时，立即把登录态标记为"已过期"
+- **失效后必须给出明确状态**，不能让 UI 继续显示已登录而接口一路返回 `-101`
+
+**4. 登出**
+
+清除 4 个 Cookie：`SESSDATA`、`bili_jct`、`DedeUserID`、`DedeUserID__ckMd5`，并同步清空持久化存储（见 [7.4](#74-登出)）。
+
+**5. 多端与异地同时登录**
+
+账号同时登录桌面端与手机 App，可能触发平台的二次验证要求。这属于**账号行为层面**的事项，与客户端技术栈无关；程序侧能做的是在登录失败/需验证时给出清晰提示，而不是静默重试。
+
+> **补充：登录之后才是风控的主要关注区**。`generate` / `poll` 是认证端点，不取内容数据；真正容易触发限制的是登录后对内容接口的调用模式。因此不建议在登录成功后立刻批量"预热"（一次性拉取榜单、关注列表、播放历史等）——应让请求由用户操作驱动，并对所有内容接口统一加节流，对 `-412` 立即退避。
+
 ---
 
 ## 8. 统一约定与错误处理
@@ -962,3 +1077,5 @@ async function pollQr(key) {
 | 18 | 假定 `replies` 一定是数组 | 无评论时为 `null` |
 | 19 | 按 `id` 数值大小选音质 | 应按 `bandwidth` 降序选 |
 | 20 | 高频请求搜索/空间接口 | 触发 `-412`/`-352`，需节流退避 |
+| 21 | 扫码轮询无终止条件：只写 `while(true)`，不处理失效、取消、兜底超时 | 必须显式实现四种退出（见 [7.5](#75-轮询节奏与终止条件)）；漏掉取消会让轮询在用户关闭界面后继续空转 |
+| 22 | `SESSDATA` 明文落盘 | 它等价于账号登录态，必须用系统凭据保护机制加密存储（见 [7.6](#76-会话持久化与安全)） |

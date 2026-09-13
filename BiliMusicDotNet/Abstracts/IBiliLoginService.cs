@@ -15,12 +15,19 @@ namespace BiliMusicDotNet.Abstracts;
 /// </para>
 /// <para>
 /// <b>线程约定</b>：所有异步方法都可从任意线程调用；事件在触发它的那个线程上<b>同步</b>回调。
-/// UI 层应在处理器里自行做一次线程切换，不要把线程模型当作契约的一部分。
+/// 由于流程由 UI 发起的 <c>await</c> 驱动，事件通常在 UI 线程上到达——但 UI 层仍应在处理器里
+/// 自行做一次线程切换（例如 Avalonia 的 <c>Dispatcher.UIThread.Invoke</c>），不要把线程模型当作契约的一部分。
 /// </para>
 /// <para>
-/// <b>安全约定</b>：凭据中的 <c>SESSDATA</c> 等价于账号登录态。
-/// 本服务只把它保存在内存中，不做任何落盘；若需"下次启动免登录"，
-/// 由 UI/宿主层使用平台凭据保护机制加密持久化，严禁明文写入配置或日志。
+/// <b>终止约定</b>：<see cref="WaitForConfirmationAsync"/> 有且只有四种出口——
+/// 登录成功、二维码失效、调用方取消（<see cref="CancellationToken"/>）、二维码有效期兜底超时。
+/// 调用方关闭登录界面时必须取消令牌，否则轮询会继续空转到有效期结束。
+/// </para>
+/// <para>
+/// <b>安全约定</b>：<see cref="BiliLoginCredentials"/> 中的 <c>SESSDATA</c> 等价于账号登录态。
+/// 本服务只把它保存在内存中（<see cref="CurrentCredentials"/>），不做任何落盘；
+/// 若需"下次启动免登录"，由 UI/宿主层使用平台凭据保护机制（Windows DPAPI、macOS Keychain、
+/// Linux Secret Service）加密持久化，严禁明文写入配置或日志。
 /// </para>
 /// </remarks>
 public interface IBiliLoginService : IDisposable
@@ -30,7 +37,8 @@ public interface IBiliLoginService : IDisposable
     /// </summary>
     /// <remarks>
     /// 事件参数中的 <see cref="LoginStateChangedEventArgs.State"/> 即"当前完整状态"，
-    /// UI 只需按它渲染，无需自行维护状态机。
+    /// UI 只需按它渲染，无需自行维护状态机；判定为终态的取值见
+    /// <see cref="IsTerminal"/>。
     /// </remarks>
     event EventHandler<LoginStateChangedEventArgs>? StateChanged;
 
@@ -226,6 +234,14 @@ public interface IBiliLoginService : IDisposable
         /// <summary>网络连续失败导致流程中断。</summary>
         Failed,
     }
+
+    /// <summary>
+    /// 判定某个登录状态是否为终态（到达后无需再轮询）。
+    /// </summary>
+    /// <param name="state">待判定的状态。</param>
+    /// <returns>是终态时为 <see langword="true"/>。</returns>
+    public static bool IsTerminal(LoginState state)
+        => state is LoginState.LoggedIn or LoginState.Expired or LoginState.TimedOut or LoginState.Failed;
 
     /// <summary>
     /// 登录成功后可用的凭据（与写操作所需的 CSRF 令牌）。

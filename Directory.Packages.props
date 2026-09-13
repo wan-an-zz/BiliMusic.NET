@@ -21,6 +21,6 @@
     <PackageVersion Include="NLog" Version="6.2.0" />
     <PackageVersion Include="NLog.Extensions.Logging" Version="6.2.0" />
     <PackageVersion Include="SukiUI" Version="7.0.2-nightly20260910.453" />
-    <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.2.0.3" />
+    <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.2.0.2" />
   </ItemGroup>
 </Project>

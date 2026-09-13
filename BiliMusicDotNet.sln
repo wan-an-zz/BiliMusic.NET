@@ -8,8 +8,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiliMusicDotNet.Desktop", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiliMusicDotNet.iOS", "BiliMusicDotNet.iOS\BiliMusicDotNet.iOS.csproj", "{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiliMusicDotNet.Browser", "BiliMusicDotNet.Browser\BiliMusicDotNet.Browser.csproj", "{B1B18848-FFB5-4F1E-B317-33C70C80234D}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,9 +34,5 @@ Global
 		{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}.Release|Any CPU.Build.0 = Release|Any CPU
 		{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}.Release|Any CPU.Deploy.0 = Release|Any CPU
-		{B1B18848-FFB5-4F1E-B317-33C70C80234D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B1B18848-FFB5-4F1E-B317-33C70C80234D}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B1B18848-FFB5-4F1E-B317-33C70C80234D}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B1B18848-FFB5-4F1E-B317-33C70C80234D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

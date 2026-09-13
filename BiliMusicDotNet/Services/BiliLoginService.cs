@@ -409,6 +409,54 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <inheritdoc />
+    public async Task<byte[]?> GetAvatarImageAsync(Uri? imageUri, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        if (imageUri is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            // 头像落在 hdslb.com CDN 上，缺少 Referer 会 403。
+            using var response = await SendAsync(
+                HttpMethod.Get,
+                imageUri,
+                ContentReferer,
+                cookieHeader: null,
+                PollRequestTimeout,
+                cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("头像下载失败：HTTP {Status}", (int)response.StatusCode);
+                return null;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            if (bytes.Length == 0)
+            {
+                _logger.LogWarning("头像下载返回空内容：{Uri}", imageUri);
+                return null;
+            }
+
+            return bytes;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            // 头像只是展示要素：失败绝不能拖垮登录流程，交给 UI 用占位图兜底。
+            _logger.LogWarning(ex, "头像下载异常：{Uri}", imageUri);
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
     public void Logout()
     {
         ThrowIfDisposed();

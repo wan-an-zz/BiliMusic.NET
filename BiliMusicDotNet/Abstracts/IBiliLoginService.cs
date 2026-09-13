@@ -123,6 +123,14 @@ public interface IBiliLoginService : IDisposable
     Task<BiliUserProfile?> GetProfileAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// 下载头像图片原始字节，交给 UI 解码显示（服务层不引用任何 UI/图像类型）。
+    /// </summary>
+    /// <param name="imageUri">头像地址，通常来自 <see cref="BiliUserProfile.AvatarUri"/>。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>图片字节；地址为空、请求失败或返回空内容时返回 <see langword="null"/>（不抛出，避免拖垮登录流程）。</returns>
+    Task<byte[]?> GetAvatarImageAsync(Uri? imageUri, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 登出：清除本地 Cookie 与内存中的登录态，并触发 <see cref="LoggedOut"/>。
     /// </summary>
     /// <remarks>

@@ -1,0 +1,11 @@
+﻿<Solution>
+  <Project Path="BiliMusicDotNet.Android/BiliMusicDotNet.Android.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="BiliMusicDotNet.Browser/BiliMusicDotNet.Browser.csproj" />
+  <Project Path="BiliMusicDotNet.Desktop/BiliMusicDotNet.Desktop.csproj" />
+  <Project Path="BiliMusicDotNet.iOS/BiliMusicDotNet.iOS.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="BiliMusicDotNet/BiliMusicDotNet.csproj" />
+</Solution>

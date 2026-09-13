@@ -1,0 +1,44 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiliMusicDotNet", "BiliMusicDotNet\BiliMusicDotNet.csproj", "{BE77A53A-6DF4-47AC-86E4-86E92C71C98E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiliMusicDotNet.Android", "BiliMusicDotNet.Android\BiliMusicDotNet.Android.csproj", "{40D651A7-FBFE-41AC-9386-FC559B08DFBA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiliMusicDotNet.Desktop", "BiliMusicDotNet.Desktop\BiliMusicDotNet.Desktop.csproj", "{88EB0702-9998-4915-BA1A-B3EB39A59081}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiliMusicDotNet.iOS", "BiliMusicDotNet.iOS\BiliMusicDotNet.iOS.csproj", "{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiliMusicDotNet.Browser", "BiliMusicDotNet.Browser\BiliMusicDotNet.Browser.csproj", "{B1B18848-FFB5-4F1E-B317-33C70C80234D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BE77A53A-6DF4-47AC-86E4-86E92C71C98E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BE77A53A-6DF4-47AC-86E4-86E92C71C98E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BE77A53A-6DF4-47AC-86E4-86E92C71C98E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BE77A53A-6DF4-47AC-86E4-86E92C71C98E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{40D651A7-FBFE-41AC-9386-FC559B08DFBA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{40D651A7-FBFE-41AC-9386-FC559B08DFBA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{40D651A7-FBFE-41AC-9386-FC559B08DFBA}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{40D651A7-FBFE-41AC-9386-FC559B08DFBA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{40D651A7-FBFE-41AC-9386-FC559B08DFBA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{40D651A7-FBFE-41AC-9386-FC559B08DFBA}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{88EB0702-9998-4915-BA1A-B3EB39A59081}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{88EB0702-9998-4915-BA1A-B3EB39A59081}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{88EB0702-9998-4915-BA1A-B3EB39A59081}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{88EB0702-9998-4915-BA1A-B3EB39A59081}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EFA3AF76-1BBB-45DA-A670-2FE60A974C5C}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{B1B18848-FFB5-4F1E-B317-33C70C80234D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1B18848-FFB5-4F1E-B317-33C70C80234D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1B18848-FFB5-4F1E-B317-33C70C80234D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1B18848-FFB5-4F1E-B317-33C70C80234D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

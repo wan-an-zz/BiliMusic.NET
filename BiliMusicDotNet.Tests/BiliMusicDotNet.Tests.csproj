@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+        <!-- System / System.Collections.Generic / System.Linq / System.Threading.Tasks / System.Net.Http 等基础命名空间。 -->
+        <ImplicitUsings>enable</ImplicitUsings>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+
+        <!-- 测试即质量闸门：分析器告警按错误处理（含 xUnit 分析器），不允许"带警告通过"。 -->
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+        <OutputType>Exe</OutputType>
+        <!-- xunit.v3 要求测试项目产出可执行宿主（apphost）。 -->
+        <UseAppHost>true</UseAppHost>
+
+        <!-- 本机沙箱里 Avalonia 的遥测任务无法写 user profile 目录，统一用这个开关关闭它。 -->
+        <UsedAvaloniaProducts></UsedAvaloniaProducts>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+    </ItemGroup>
+
+    <!--
+      以"链接源码"而非 ProjectReference 的方式引用被测代码。
+
+      原因：核心项目 BiliMusicDotNet 依赖 Avalonia，其构建会执行 Avalonia.BuildServices 遥测任务，
+      而该任务在当前沙箱里无法写入 %LOCALAPPDATA%（UnauthorizedAccessException 直接导致构建失败）。
+      链接源码让测试只承担被测服务的真实依赖（BCL + Microsoft.Extensions.Logging），
+      与本仓库现有的"无测试项目"状态相比前进了一步，且不会因为 UI 框架的构建副作用而变红。
+
+      待 Avalonia 构建副作用不再妨碍 CI 时，建议改为：
+          <ProjectReference Include="..\BiliMusicDotNet\BiliMusicDotNet.csproj" />
+      并删掉下面的 Compile 链接，以获得"测试随被测代码重构自动失败"的完整保护。
+    -->
+    <ItemGroup>
+        <Compile Include="..\BiliMusicDotNet\Abstracts\IBiliLoginService.cs" Link="Linked\IBiliLoginService.cs"/>
+        <Compile Include="..\BiliMusicDotNet\Services\BiliLoginService.cs" Link="Linked\BiliLoginService.cs"/>
+    </ItemGroup>
+</Project>

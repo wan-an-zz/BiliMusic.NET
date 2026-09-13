@@ -5,3 +5,7 @@ riderModule.iml
 /_ReSharper.Caches/
 .idea/
 AGENTS.md
+
+# 离线还原用的本地包源（由 BiliMusicDotNet.Tests/rebuild-offline-feed.ps1 从 NuGet 缓存生成，
+# 约 50 MB 二进制，不入库；联网环境走官方源时也不需要它）。
+BiliMusicDotNet.Tests/.nuget-offline-feed/

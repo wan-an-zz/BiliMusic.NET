@@ -1,4 +1,4 @@
-﻿<Solution>
+<Solution>
   <Project Path="BiliMusicDotNet.Android/BiliMusicDotNet.Android.csproj">
     <Deploy />
   </Project>
@@ -7,5 +7,6 @@
   <Project Path="BiliMusicDotNet.iOS/BiliMusicDotNet.iOS.csproj">
     <Deploy />
   </Project>
+  <Project Path="BiliMusicDotNet.Tests/BiliMusicDotNet.Tests.csproj" />
   <Project Path="BiliMusicDotNet/BiliMusicDotNet.csproj" />
 </Solution>

@@ -22,5 +22,14 @@
     <PackageVersion Include="NLog.Extensions.Logging" Version="6.2.0" />
     <PackageVersion Include="SukiUI" Version="7.0.2-nightly20260910.453" />
     <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.2.0.2" />
+
+    <!--
+      测试栈。选型对齐本机 NuGet 缓存中已有的版本，保证离线环境也能还原。
+      用 xunit.v3 而非 xunit 2.x：v3 自带 Microsoft.Testing.Platform 运行器，
+      不需要 VSTest 的 testhost 子进程（本机沙箱下该子进程无法启动）。
+    -->
+    <PackageVersion Include="xunit.v3" Version="4.0.0-pre.81" />
+    <!-- 测试项目直接引用被测服务用到的日志抽象（版本与上面的 Microsoft.Extensions.Logging 保持一致）。 -->
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0-preview.6.26359.118" />
   </ItemGroup>
 </Project>

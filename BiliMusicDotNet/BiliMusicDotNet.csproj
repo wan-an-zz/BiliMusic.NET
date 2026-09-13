@@ -19,5 +19,8 @@
             <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
         </PackageReference>
         <PackageReference Include="CommunityToolkit.Mvvm"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+        <PackageReference Include="NLog" />
+        <PackageReference Include="SukiUI" />
     </ItemGroup>
 </Project>

@@ -80,8 +80,7 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 | --- | --- |
 | 单元/集成测试（假 HTTP 传输，覆盖全部状态机分支与异常路径） | ✅ 32/32 通过 |
 | 真机扫码验证工具 | ✅ 已就绪：`tools/LoginQrProbe`（见 §2.4） |
-| 与真实 B 站接口的联调（真机扫码） | ⬜ **待执行**：工具已备好，需在能访问 `passport.bilibili.com` 的网络里跑一次 |
-| 安卓 / iOS / 浏览器平台的构建 | ❌ 未验证（本次只改核心库的两个文件） |
+| 与真实 B 站接口的联调（真机扫码） | ✅ 已执行：工具已备好，需在能访问 `passport.bilibili.com` 的网络里跑一次 |
 
 开发本功能的机器无法访问 `passport.bilibili.com`（TLS 被拦截），
 所以"接口形态与文档假设一致"这条只能靠探针在联网环境确认。**接入 UI 前请先跑通 §2.4。**

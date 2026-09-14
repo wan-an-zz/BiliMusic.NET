@@ -192,19 +192,20 @@ UI（登录界面）                    BiliLoginService                        
 
 > 本节是"UI 该怎么做"的规格说明。服务端已按此实现并有测试覆盖；UI 只需遵守。
 
-### 4.1 先注册到容器（**尚未做，需要 UI 侧补一行**）
+### 4.1 容器注册（已完成）
 
-本次改动只动了 `Services/BiliLoginService.cs` 与其接口，**没有改** `DependencyInjection/ServiceCollectionExtensions.cs`。
-UI 接入时请在 `AddBiliMusicDotNet()` 的 `// Services` 段落加：
+`DependencyInjection/ServiceCollectionExtensions.cs` 已在 `// Services` 段落注册：
 
 ```csharp
 services.AddSingleton<IBiliLoginService, BiliLoginService>();
 ```
 
+UI 侧直接构造函数注入 `IBiliLoginService` 即可，不需要自己 new。
+
 - 必须是 **Singleton**：登录态与 `CookieContainer` 在服务实例里常驻，
   用 Transient/Scoped 会导致每次拿到新实例、Cookie 丢失。
-- 两个构造函数（无参 / `ILogger<T>` / `HttpMessageHandler + ILogger<T>`）中，
-  容器会自动选 `ILogger<BiliLoginService>` 那个，无需额外配置。
+- 三个构造函数（无参 / `ILogger<T>` / `HttpMessageHandler + ILogger<T>`）中，
+  容器会选 `ILogger<BiliLoginService>` 那个，无需额外配置。
 
 ### 4.2 主流程（ViewModel 侧的最简写法）
 
@@ -433,5 +434,4 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
 | `tools/LoginQrProbe/QrEncoder.cs` | 极简二维码编码器（版本 5-L、字节模式） |
 | `tools/LoginQrProbe/QrConsoleRenderer.cs` | 终端渲染（ANSI 反显 + 半块字符） |
 | `tools/LoginQrProbe/README.md` | 探针用法、选项、断言清单 |
-
-**本次未改动但 UI 接入需要动的文件**：`BiliMusicDotNet/DependencyInjection/ServiceCollectionExtensions.cs`（见 §4.1）。
+| `BiliMusicDotNet/DependencyInjection/ServiceCollectionExtensions.cs` | 服务注册（`AddSingleton<IBiliLoginService, BiliLoginService>()`，见 §4.1） |

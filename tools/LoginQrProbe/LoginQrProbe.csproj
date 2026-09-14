@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <AssemblyName>LoginQrProbe</AssemblyName>
+        <RootNamespace>BiliMusicDotNet.Tools.LoginQrProbe</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+    </ItemGroup>
+
+    <!--
+      链接被测源码而不是 ProjectReference：核心项目依赖 Avalonia，
+      其构建遥测在部分受限环境下会直接失败（详见测试项目 README 的同一说明）。
+    -->
+    <ItemGroup>
+        <Compile Include="..\..\BiliMusicDotNet\Abstracts\IBiliLoginService.cs" Link="Linked\IBiliLoginService.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet\Services\BiliLoginService.cs" Link="Linked\BiliLoginService.cs"/>
+        <!-- 复用测试项目的假传输做离线自检，避免两处维护同一份预置响应。 -->
+        <Compile Include="..\..\BiliMusicDotNet.Tests\Support\FakeBiliHandler.cs" Link="Linked\FakeBiliHandler.cs"/>
+    </ItemGroup>
+</Project>

@@ -236,14 +236,13 @@ internal static class OfflineSelfCheck
         }
     }
 
-    /// <summary>占位：离线自检里演示一下渲染管线可跑通。</summary>
+    /// <summary>确认二维码生成与渲染管线可跑通（用真实长度的内容）。</summary>
+    /// <param name="content">二维码内容。</param>
     private static void probeRender(string content)
     {
-        var lines = QrConsoleRenderer.Render(
-            QrEncoder.Encode(content),
-            new QrConsoleRenderer.Options(UseBlocks: true, UseAnsiColors: false, QuietZone: 2));
+        var lines = QrConsoleRenderer.Render(content, new QrConsoleRenderer.Options(QuietZone: true));
 
-        // 只断言"渲染出了方阵"，不打印整张图，避免刷屏。
+        // 只报告尺寸，不打印整张图，避免刷屏。
         var width = lines.Count > 0 ? lines[0].Length : 0;
         Console.WriteLine($"   INFO  二维码渲染管线可用（{lines.Count} 行 × {width} 字符）");
     }

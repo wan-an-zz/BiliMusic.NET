@@ -13,6 +13,8 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+        <!-- 二维码生成与终端渲染：用 QRCoder，不再自写编码器。 -->
+        <PackageReference Include="QRCoder"/>
     </ItemGroup>
 
     <!--

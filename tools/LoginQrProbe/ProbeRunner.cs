@@ -237,27 +237,16 @@ internal static class ProbeRunner
     /// <param name="content">二维码内容。</param>
     private static void RenderQr(string content)
     {
-        bool[,] modules;
+        Console.WriteLine();
         try
         {
-            modules = QrEncoder.Encode(content);
+            QrConsoleRenderer.WriteToConsole(content, new QrConsoleRenderer.Options(QuietZone: true));
         }
-        catch (ArgumentException ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Console.WriteLine($"   渲染失败：{ex.Message}");
-            Console.WriteLine("   请改用其它方式生成二维码（内容本身是有效的）。");
-            return;
-        }
-
-        var useAnsi = !Console.IsOutputRedirected;
-        var lines = QrConsoleRenderer.Render(
-            modules,
-            new QrConsoleRenderer.Options(UseBlocks: true, UseAnsiColors: useAnsi, QuietZone: 4));
-
-        Console.WriteLine();
-        foreach (var line in lines)
-        {
-            Console.WriteLine("   " + line);
+            // 渲染失败不该影响验证本身：内容仍然有效，可自行生成二维码。
+            Console.WriteLine($"   渲染失败：{ex.GetType().Name}: {ex.Message}");
+            Console.WriteLine("   请用 --no-render 取内容后自行生成二维码（登录链路不受影响）。");
         }
 
         Console.WriteLine();

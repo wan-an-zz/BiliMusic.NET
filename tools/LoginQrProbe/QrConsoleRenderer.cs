@@ -1,92 +1,61 @@
-using System.Text;
+using QRCoder;
 
 namespace BiliMusicDotNet.Tools.LoginQrProbe;
 
 /// <summary>
-/// 把二维码矩阵渲染成终端可显示的字符画。
+/// 用 QRCoder 生成二维码并在终端渲染（不自行实现编码）。
 /// </summary>
+/// <remarks>
+/// <para>
+/// 只使用 QRCoder 的 <see cref="ASCIIQRCode"/> 渲染器：输出字符画，
+/// 不依赖 System.Drawing，因此在各平台与无图形环境都能跑。
+/// </para>
+/// <para>
+/// 采用 <c>GetGraphicSmall</c> 的默认配色（深色模块用空格、浅色模块用实心块）：
+/// 二维码需要深色印在浅色底上，而终端多半是浅字深底，所以这个"看起来反色"的输出恰好是对的。
+/// 输出的长宽比也接近 1:1，不会像逐模块横排那样被拉长。
+/// </para>
+/// </remarks>
 internal static class QrConsoleRenderer
 {
     /// <summary>渲染选项。</summary>
-    /// <param name="UseBlocks">是否使用半块字符（更紧凑、更接近正方形）。</param>
-    /// <param name="UseAnsiColors">是否使用 ANSI 反色（保证浅色终端也能扫）。</param>
-    /// <param name="QuietZone">静区宽度（模块数），规范要求 4。</param>
-    internal readonly record struct Options(bool UseBlocks, bool UseAnsiColors, int QuietZone);
+    /// <param name="QuietZone">是否绘制静区（规范要求四周各留 4 个模块，务必保持开启）。</param>
+    internal readonly record struct Options(bool QuietZone);
 
     /// <summary>
-    /// 渲染为多行文本。
+    /// 把文本生成二维码并渲染成多行字符画。
     /// </summary>
-    /// <param name="modules">模块矩阵。</param>
+    /// <param name="content">二维码内容。</param>
     /// <param name="options">渲染选项。</param>
-    /// <returns>每行一个字符串。</returns>
-    public static IReadOnlyList<string> Render(bool[,] modules, Options options)
+    /// <returns>每行一个字符串（尚未加缩进）。</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="content"/> 为空。</exception>
+    /// <exception cref="QRCoder.Exceptions.DataTooLongException">内容超出二维码容量。</exception>
+    public static IReadOnlyList<string> Render(string content, Options options)
     {
-        var size = modules.GetLength(0);
-        var q = Math.Max(0, options.QuietZone);
-        var total = size + q * 2;
+        ArgumentException.ThrowIfNullOrEmpty(content);
 
-        // ANSI：把前景/背景反转后打印空格，终端配色的深浅都不影响扫码。
-        const string darkOnLight = "\u001b[7m";   // 反显
-        const string reset = "\u001b[0m";
+        using var generator = new QRCodeGenerator();
+        using var data = generator.CreateQrCode(content, QRCodeGenerator.ECCLevel.L);
+        using var renderer = new AsciiQRCode(data);
 
-        var lines = new List<string>();
+        var text = renderer.GetGraphicSmall(drawQuietZones: options.QuietZone);
 
-        if (options.UseBlocks && options.UseAnsiColors)
-        {
-            // 一次输出两行：上半块 ▀ 与下半块 ▄ 组合，纵向压缩一半。
-            // 只在能用 ANSI 反显时走这条路——否则浅色终端上会变成浅底浅块，扫不出来。
-            for (var y = 0; y < total; y += 2)
-            {
-                var sb = new StringBuilder();
-                for (var x = 0; x < total; x++)
-                {
-                    sb.Append(BlockChar(IsDark(modules, x - q, y - q), IsDark(modules, x - q, y + 1 - q)));
-                }
-
-                lines.Add(sb.ToString());
-            }
-
-            return lines;
-        }
-
-        // 逐模块输出：一个模块占一个字符单元（宽 2 字符保证接近正方形），不做纵向合并以免丢模块。
-        for (var y = 0; y < total; y++)
-        {
-            var sb = new StringBuilder();
-            for (var x = 0; x < total; x++)
-            {
-                var dark = IsDark(modules, x - q, y - q);
-
-                if (options.UseAnsiColors)
-                {
-                    sb.Append(dark ? $"{darkOnLight}  {reset}" : "  ");
-                }
-                else
-                {
-                    sb.Append(dark ? "██" : "  ");
-                }
-            }
-
-            lines.Add(sb.ToString());
-        }
-
-        return lines;
+        return text
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.TrimEnd('\r'))
+            .ToArray();
     }
 
-    /// <summary>取模块是否深色；超出矩阵范围（静区）视为浅色。</summary>
-    private static bool IsDark(bool[,] modules, int x, int y)
+    /// <summary>
+    /// 直接打印到控制台（带缩进）。
+    /// </summary>
+    /// <param name="content">二维码内容。</param>
+    /// <param name="options">渲染选项。</param>
+    public static void WriteToConsole(string content, Options options)
     {
-        var size = modules.GetLength(0);
-        return x >= 0 && y >= 0 && x < size && y < size && modules[y, x];
-    }
-
-    private static string BlockChar(bool upper, bool lower)
-        => (upper, lower) switch
+        foreach (var line in Render(content, options))
         {
-            // 上下同色时用整块，保证横向宽度与其他情况一致（都是 1 个字符宽）。
-            (true, true) => "█",
-            (true, false) => "▀",
-            (false, true) => "▄",
-            (false, false) => " ",
-        };
+            Console.WriteLine("   " + line);
+        }
+    }
 }

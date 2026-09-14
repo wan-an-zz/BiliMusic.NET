@@ -57,23 +57,25 @@ dotnet run --project tools/LoginQrProbe -- --offline
 | 5 | `nav` 返回昵称 | **Cookie 域不对**（应为 `bilibili.com`，不是 `passport.bilibili.com`） |
 | 6 | 头像下载到非空字节 | 缺 `Referer` 导致 CDN 403 |
 
-## 关于二维码渲染
+## 二维码渲染
 
-探针自带一个极简编码器（`QrEncoder.cs`，版本 5-L、字节模式，约 106 字节容量），
-不引第三方包，保证离线可用。它的正确性已通过独立解码器往返验证（含 BCH 格式串与 Reed-Solomon 自洽性检查）。
+用 **QRCoder** 生成（`AsciiQRCode` 渲染器输出字符画），不自行实现编码器：
 
-终端渲染优先用 ANSI 反显 + 半块字符（紧凑且不受配色影响）；
-输出被重定向或终端不支持 ANSI 时，退化为逐模块的 `██` / 空格渲染，**一个模块都不合并**，避免扫不出来。
+- 选 `AsciiQRCode` 是因为它不依赖 `System.Drawing`，跨平台且无需图形环境；
+- 采用 `GetGraphicSmall` 的默认配色（深色模块=空格、浅色模块=实心块）：
+  二维码要"深色印在浅色底上"，而终端多为浅字深底，这个看似反色的输出恰好是正确的，
+  且长宽比接近 1:1，不像逐模块横排那样被拉长；
+- 静区默认开启（规范要求四周各留 4 模块，关掉会明显降低识别率）。
 
-若终端渲染始终不理想，用 `--no-render` 拿到内容后自行生成二维码即可 —— 验证的重点是登录链路，不是渲染。
+若终端显示不理想，用 `--no-render` 拿到内容后自行生成二维码即可 —— 验证重点是登录链路，不是渲染。
 
-## 离线还原
+## 还原与离线
 
-本目录自带 `NuGet.config` 指向仓库内被忽略的离线包源，无网络也能 `dotnet run`。
-该包源由脚本生成：
+本目录的 `NuGet.config` 声明了两个源：仓库内的离线包源（可选，已 gitignore）与 nuget.org。
+**首次还原需要联网**（QRCoder 不在本机 NuGet 缓存中），之后包进入缓存即可离线构建。
+
+生成离线包源（可选，供无网络时还原已缓存的包）：
 
 ```powershell
 pwsh -File tools/LoginQrProbe/rebuild-offline-feed.ps1
 ```
-
-联网环境删掉本目录的 `NuGet.config` 即改走官方源。

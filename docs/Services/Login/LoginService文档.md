@@ -102,6 +102,7 @@ dotnet run --project tools/LoginQrProbe -- --offline    # 离线自检，不联�
 | `nav` 返回昵称 | §5.3 Cookie 域 |
 | 头像下载到非空字节 | §5.4 CDN Referer |
 
+二维码用 **QRCoder** 生成（`AsciiQRCode` 字符画渲染），首次还原需要联网拉包。
 用法、选项与完整断言清单见 `tools/LoginQrProbe/README.md`。
 
 ---
@@ -398,19 +399,23 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
 登录成功后**不要**立刻批量拉榜单/历史/关注做"预热"，也不要在轮询期间叠加其它内容接口请求——
 `-412` 风控主要发生在登录后的内容接口调用模式上。本服务只调登录链路所需的 3 个接口。
 
-### 5.13 自带二维码编码器时，格式信息是最容易写错的一处
+### 5.13 二维码渲染不要自己写，用 QRCoder
 
-真机验证探针需要把二维码画到终端，为此自带了一个极简编码器（不引第三方包）。
-其中**格式信息**（纠错等级 + 掩码，15 位 BCH）最容易被写错，而且错了扫码端只会"扫不出来"，没有任何报错。
+真机验证探针需要把二维码画到终端。一开始为了"零依赖"自写了一个极简编码器，结果是花在调试它上面的时间
+远超它省下的那点依赖 —— 二维码有太多"错了也不报错、只是扫不出来"的细节：
 
-- 正确算法是教科书移位寄存器：从最高位开始，逢 1 就异或生成多项式 `0x537 << (i - 10)`。
-- 写成"左移一位后判断第 9 位"的变体时，算出的 15 位串**不匹配任何合法码字**——
-  用它渲染的图看起来完全正常，就是扫不动。
-- 判据：L 级 8 个掩码的格式串应依次为
-  `0x77C4, 0x72F3, 0x7DAA, 0x789D, 0x662F, 0x6318, 0x6C41, 0x6976`。
+| 自写时踩到的坑 | 后果 |
+| --- | --- |
+| 格式信息 BCH 写成"左移一位判第 9 位"的变体 | 15 位串不匹配任何合法码字，图看着正常但扫不动 |
+| 版本 10 起的字符计数指示符是 16 位（1~9 是 8 位），按 8 位算 | 长内容被截断 |
+| 把版本 7 才存在的版本信息区当成保留区（低版本那 36 个模块是数据模块） | 数据位整体错位 24 个模块 |
+| 容量估算只减模式指示符、忘了字符计数字段 | 边界长度选错版本 |
 
-本仓库的做法是用一个**独立实现**的解码器对编码结果做往返验证（从矩阵反推掩码与数据，并重算 BCH 与纠错码），
-避免"用同一份错误逻辑验证自己"。具体见 `tools/LoginQrProbe/README.md`。
+判据留档（L 级 8 个掩码的格式串，可用于校验任何实现）：
+`0x77C4, 0x72F3, 0x7DAA, 0x789D, 0x662F, 0x6318, 0x6C41, 0x6976`。
+
+**结论**：改用 [QRCoder](https://github.com/Shane32/QRCoder)（`AsciiQRCode` 渲染器，不依赖 System.Drawing）。
+这类"标准明确、细节繁多"的编解码，用成熟库远比自写划算；自写唯一的收益是少一个依赖，代价却是几轮难查的调试。
 
 ---
 
@@ -431,7 +436,6 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
 | `tools/LoginQrProbe/ProbeRunner.cs` | 真机链路编排与断言 |
 | `tools/LoginQrProbe/ProbeResult.cs` | 断言集合与脱敏报告 |
 | `tools/LoginQrProbe/OfflineSelfCheck.cs` | 离线自检（用假传输验证探针自身） |
-| `tools/LoginQrProbe/QrEncoder.cs` | 极简二维码编码器（版本 5-L、字节模式） |
-| `tools/LoginQrProbe/QrConsoleRenderer.cs` | 终端渲染（ANSI 反显 + 半块字符） |
+| `tools/LoginQrProbe/QrConsoleRenderer.cs` | 二维码生成与终端渲染（QRCoder） |
 | `tools/LoginQrProbe/README.md` | 探针用法、选项、断言清单 |
 | `BiliMusicDotNet/DependencyInjection/ServiceCollectionExtensions.cs` | 服务注册（`AddSingleton<IBiliLoginService, BiliLoginService>()`，见 §4.1） |

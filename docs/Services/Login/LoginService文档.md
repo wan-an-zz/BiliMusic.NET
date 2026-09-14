@@ -79,11 +79,30 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 | 项 | 状态 |
 | --- | --- |
 | 单元/集成测试（假 HTTP 传输，覆盖全部状态机分支与异常路径） | ✅ 32/32 通过 |
-| 与真实 B 站接口的联调（真机扫码） | ❌ **未验证**：当前开发环境无法访问 `passport.bilibili.com`（TLS 被拦截），无法取真实二维码 |
+| 真机扫码验证工具 | ✅ 已就绪：`tools/LoginQrProbe`（见 §2.4） |
+| 与真实 B 站接口的联调（真机扫码） | ⬜ **待执行**：工具已备好，需在能访问 `passport.bilibili.com` 的网络里跑一次 |
 | 安卓 / iOS / 浏览器平台的构建 | ❌ 未验证（本次只改核心库的两个文件） |
 
-因此**首次真机联调前请预留一轮验证**：取真实二维码 → 手机扫码 → 确认登录，
-重点观察 §7.1 的"成功形态"与 §7.2 的"Cookie 域"是否与假传输假设一致。
+开发本功能的机器无法访问 `passport.bilibili.com`（TLS 被拦截），
+所以"接口形态与文档假设一致"这条只能靠探针在联网环境确认。**接入 UI 前请先跑通 §2.4。**
+
+### 2.4 真机扫码验证探针
+
+```powershell
+dotnet run --project tools/LoginQrProbe                 # 真机扫码，终端渲染二维码
+dotnet run --project tools/LoginQrProbe -- --proxy http://127.0.0.1:7897
+dotnet run --project tools/LoginQrProbe -- --offline    # 离线自检，不联网
+```
+
+探针走完整链路并逐步断言，退出码 0 表示全部通过。它重点验证三件单元测试无法确认的事：
+
+| 断言 | 若失败，说明要去核对本文哪一节 |
+| --- | --- |
+| 二维码内容是合法 bilibili https 登录地址 | §3.1 取码 |
+| `nav` 返回昵称 | §5.3 Cookie 域 |
+| 头像下载到非空字节 | §5.4 CDN Referer |
+
+用法、选项与完整断言清单见 `tools/LoginQrProbe/README.md`。
 
 ---
 
@@ -378,6 +397,20 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
 登录成功后**不要**立刻批量拉榜单/历史/关注做"预热"，也不要在轮询期间叠加其它内容接口请求——
 `-412` 风控主要发生在登录后的内容接口调用模式上。本服务只调登录链路所需的 3 个接口。
 
+### 5.13 自带二维码编码器时，格式信息是最容易写错的一处
+
+真机验证探针需要把二维码画到终端，为此自带了一个极简编码器（不引第三方包）。
+其中**格式信息**（纠错等级 + 掩码，15 位 BCH）最容易被写错，而且错了扫码端只会"扫不出来"，没有任何报错。
+
+- 正确算法是教科书移位寄存器：从最高位开始，逢 1 就异或生成多项式 `0x537 << (i - 10)`。
+- 写成"左移一位后判断第 9 位"的变体时，算出的 15 位串**不匹配任何合法码字**——
+  用它渲染的图看起来完全正常，就是扫不动。
+- 判据：L 级 8 个掩码的格式串应依次为
+  `0x77C4, 0x72F3, 0x7DAA, 0x789D, 0x662F, 0x6318, 0x6C41, 0x6976`。
+
+本仓库的做法是用一个**独立实现**的解码器对编码结果做往返验证（从矩阵反推掩码与数据，并重算 BCH 与纠错码），
+避免"用同一份错误逻辑验证自己"。具体见 `tools/LoginQrProbe/README.md`。
+
 ---
 
 ## 6. 文件清单
@@ -393,5 +426,12 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
 | `BiliMusicDotNet.Tests/SessionLifecycleTests.cs` | 恢复、登出、释放测试 |
 | `BiliMusicDotNet.Tests/Support/FakeBiliHandler.cs` | 假 HTTP 传输与预置响应 |
 | `BiliMusicDotNet.Tests/README.md` | 测试项目入口说明（提交闸门、离线还原） |
+| `tools/LoginQrProbe/Program.cs` | 探针入口与命令行解析 |
+| `tools/LoginQrProbe/ProbeRunner.cs` | 真机链路编排与断言 |
+| `tools/LoginQrProbe/ProbeResult.cs` | 断言集合与脱敏报告 |
+| `tools/LoginQrProbe/OfflineSelfCheck.cs` | 离线自检（用假传输验证探针自身） |
+| `tools/LoginQrProbe/QrEncoder.cs` | 极简二维码编码器（版本 5-L、字节模式） |
+| `tools/LoginQrProbe/QrConsoleRenderer.cs` | 终端渲染（ANSI 反显 + 半块字符） |
+| `tools/LoginQrProbe/README.md` | 探针用法、选项、断言清单 |
 
 **本次未改动但 UI 接入需要动的文件**：`BiliMusicDotNet/DependencyInjection/ServiceCollectionExtensions.cs`（见 §4.1）。

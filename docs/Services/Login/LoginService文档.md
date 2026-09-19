@@ -49,8 +49,11 @@
 | `cf23c12` `docs(login): 补充状态机终态判定与线程约定` | 契约注释：终态判定与线程模型 |
 | `5c3c22c` `docs(test): 更新测试项目说明` | 测试项目 README |
 | `docs(login): 补登录服务维护文档` | 本文档 |
+| `08e21b6` `refactor(login): 异常模型集中到 Models/Exceptions` | `BiliApiException` 迁入 `Models/Exceptions/` |
+| `153ebe6` `feat(credential): 新增凭据契约与内存持有者` | `ICredentialService`、`CredentialService` + `CredentialStorageTests` |
+| `553182c` `refactor(login): 凭据改由 CredentialService 持有` | 删除 `CurrentCredentials`、登录成功落盘、登出与失效清理 + `CredentialPersistenceTests` |
 
-分支：`feat/用户登录及头像显示`。
+分支：`feature/Login`。
 
 ### 2.2 子功能与测试对照表
 
@@ -58,7 +61,7 @@
 
 ```powershell
 dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
-# 判定依据：Total: 32, Errors: 0, Failed: 0
+# 判定依据：Total: 47, Errors: 0, Failed: 0
 ```
 
 | # | 子功能 | 实现位置 | 测试 | 用例数 |
@@ -66,7 +69,8 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 | 1 | 取码（申请二维码会话） | `CreateQrSessionAsync` | `QrSessionTests` | 7 |
 | 2 | 单次状态查询 | `PollQrStatusAsync` | `QrPollingTests.状态查询_*` | 4 |
 | 3 | 轮询至终局 | `WaitForConfirmationAsync` | `QrPollingTests.终止_*` / `进度回调_*` | 6 |
-| 4 | 凭据落地 | `PublishCredentials` / `BuildCredentials` | `QrPollingTests` 成功用例 | 含在 3 内 |
+| 4 | 凭据组装 | `PublishCredentials` / `BuildCredentials` | `QrPollingTests` 成功用例 | 含在 3 内 |
+| 4.1 | 凭据落盘与清理 | `SaveCredentialSafelyAsync` / `ClearPersistedCredentialsSafely` | `CredentialPersistenceTests` | 6 |
 | 5 | 用户信息抓取 | `GetProfileAsync` | `UserProfileTests` | 5 |
 | 6 | 头像下载 | `GetAvatarImageAsync` | `AvatarTests` | 4 |
 | 7 | 登录态恢复 | `TryRestoreSessionAsync` | `SessionLifecycleTests.恢复登录态_*` | 3 |
@@ -78,7 +82,7 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 
 | 项 | 状态 |
 | --- | --- |
-| 单元/集成测试（假 HTTP 传输，覆盖全部状态机分支与异常路径） | ✅ 32/32 通过 |
+| 单元/集成测试（假 HTTP 传输，覆盖全部状态机分支与异常路径） | ✅ 47/47 通过 |
 | 真机扫码验证工具 | ✅ 已就绪：`tools/LoginQrProbe`（见 §2.4） |
 | 与真实 B 站接口的联调（真机扫码） | ✅ 已执行：工具已备好，需在能访问 `passport.bilibili.com` 的网络里跑一次 |
 
@@ -95,11 +99,11 @@ dotnet run --project tools/LoginQrProbe -- --offline    # 离线自检，不联�
 
 探针走完整链路并逐步断言，退出码 0 表示全部通过。它重点验证三件单元测试无法确认的事：
 
-| 断言 | 若失败，说明要去核对本文哪一节 |
+| 断言 | 判据出处 |
 | --- | --- |
 | 二维码内容是合法 bilibili https 登录地址 | §3.1 取码 |
-| `nav` 返回昵称 | §6.3 Cookie 域 |
-| 头像下载到非空字节 | §6.4 CDN Referer |
+| `nav` 返回昵称 | Cookie 域必须是 `bilibili.com`（服务内部写死，见 §5.5） |
+| 头像下载到非空字节 | CDN 请求必须带 `Referer: https://www.bilibili.com`（服务内部写死） |
 
 二维码用 **QRCoder** 生成（`AsciiQRCode` 字符画渲染），首次还原需要联网拉包。
 用法、选项与完整断言清单见 `tools/LoginQrProbe/README.md`。
@@ -197,15 +201,16 @@ UI（登录界面）                    BiliLoginService                        
 `DependencyInjection/ServiceCollectionExtensions.cs` 已在 `// Services` 段落注册：
 
 ```csharp
+services.AddSingleton<ICredentialService, CredentialService>();
 services.AddSingleton<IBiliLoginService, BiliLoginService>();
 ```
 
-UI 侧直接构造函数注入 `IBiliLoginService` 即可，不需要自己 new。
+UI 侧直接构造函数注入 `IBiliLoginService`（需要凭据时再注入 `ICredentialService`）即可，不需要自己 new。
 
 - 必须是 **Singleton**：登录态与 `CookieContainer` 在服务实例里常驻，
   用 Transient/Scoped 会导致每次拿到新实例、Cookie 丢失。
-- 三个构造函数（无参 / `ILogger<T>` / `HttpMessageHandler + ILogger<T>`）中，
-  容器会选 `ILogger<BiliLoginService>` 那个，无需额外配置。
+- 三个构造函数（无参 / `ILogger<T> + ICredentialService` / `HttpMessageHandler + ILogger<T> + ICredentialService`）中，
+  容器会选第一个能解析全部参数的那条，无需额外配置。
 
 ### 4.2 主流程（ViewModel 侧的最简写法）
 
@@ -272,25 +277,32 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
   但契约不保证这一点——UI 处理器内请自行做一次线程切换（如 `Dispatcher.UIThread.Invoke`）。
 - `IProgress<T>` 建议用 `Progress<T>`（会自动回到创建它的同步上下文）。
 
-### 4.7 凭据持久化契约（**服务不做，UI/宿主必须做**）
+### 4.7 凭据持久化契约（**由 `ICredentialService` 承担**）
 
 `BiliLoginCredentials.SessData` **等价于账号登录态**，配合 `BiliJct` 可执行写操作。
 
 | 责任 | 归属 |
 | --- | --- |
-| 内存中持有凭据 | 服务（`CurrentCredentials`） |
-| 跨启动加密持久化 | **UI / 宿主**：Windows DPAPI、macOS Keychain、Linux Secret Service |
+| 内存中持有凭据 | `ICredentialService.Current`（**唯一读取入口**，登录服务不再暴露凭据） |
+| 跨启动明文持久化 | `CredentialService`：`<LocalApplicationData>/BiliMusicDotNet/LoginCredential/credentials.json` |
 | 恢复登录态 | `TryRestoreSessionAsync(credentials, token)`（内部会调 `nav` 校验） |
-| 登出时删除持久化副本 | UI / 宿主（`Logout()` 只清内存与 Cookie） |
-| 日志 | 服务只记录 Cookie **个数**与 `mid`，绝不输出凭据值 |
+| 登出 / 失效时删除持久化副本 | 登录服务调用 `ICredentialService.ClearAsync()`，UI 不需要自己删 |
+| 日志 | 只记录路径、Cookie **个数**与 `mid`，绝不输出凭据值 |
 
 `BiliLoginCredentials.CookieHeader` 可直接用于为其它 HTTP 客户端附加登录态；
 **只在与 B 站域名通信时附加**，禁止拼进 URL。
 
+细节（目录、字段、失败边界、最小用法）见
+[登录凭据服务文档](../Credential/LoginCredentialService文档.md)。
+
 ### 4.8 登出契约
 
-`Logout()` 只做本地清理：清除 Cookie 容器中的凭据、清空 `CurrentProfile`、状态回 `Idle`、触发 `LoggedOut`。
-**不调用** B 站登出接口，不影响其它设备。若持久化过凭据，调用方需同步删除。
+`Logout()` 只做本地清理：清除 Cookie 容器中的凭据、请凭据服务清空内存并**删除磁盘副本**、
+清空 `CurrentProfile`、状态回 `Idle`、触发 `LoggedOut`。
+**不调用** B 站登出接口，不影响其它设备。
+
+磁盘副本删除失败时抛 `StorageException`：此时 Cookie 与内存态已经清干净（本地登录确实退出了），
+UI 需捕获该异常并提示用户本地可能仍留有凭据文件。
 
 ### 4.9 异常契约
 
@@ -299,17 +311,19 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
 | `BiliApiException` | 业务码非 0（如 `-412` 风控、响应缺字段、返回非 JSON） | 展示 `Message`，提供重试 |
 | `HttpRequestException` | 网络层失败（DNS/TLS/断网） | 提示网络异常 |
 | `OperationCanceledException` | 调用方取消 | 静默收尾（用户主动关闭界面） |
+| `StorageException` | `Logout()` 删除磁盘副本失败 | 提示"已退出，但本地凭据文件删除失败" |
 | `ObjectDisposedException` | 服务已释放 | 编程错误，不应出现在正常流程 |
 
-`WaitForConfirmationAsync` **不抛**上述前两种：它把网络失败收敛为 `NetworkFailed` 终局，
+`WaitForConfirmationAsync` **不抛**前两种：它把网络失败收敛为 `NetworkFailed` 终局，
 只有"取消"会抛出（取消是控制流，不是错误）。
+登录链路上的落盘失败同样不抛：只记 `LogError`，不把已经成立的登录判成失败。
 
 ---
 
 ## 5. 接口文档（API 参考）
 
 > 本节是 Login 模块的**接口参考**：类型清单、成员签名、返回、抛错与副作用。
-> "UI 该照着怎么写"见 §4，"为什么这么实现"见 §6。
+> "UI 该照着怎么写"见 §4。
 
 ### 5.1 类型清单
 
@@ -327,7 +341,10 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
 | `BiliMusicDotNet.Models.Login` | `LoginStateChangedEventArgs` | `Models/Login/LoginStateChangedEventArgs.cs` |
 | `BiliMusicDotNet.Models.Login` | `LoginSucceededEventArgs` | `Models/Login/LoginSucceededEventArgs.cs` |
 | `BiliMusicDotNet.Models.Login` | `LoggedOutEventArgs` | `Models/Login/LoggedOutEventArgs.cs` |
-| `BiliMusicDotNet.Models.Login` | `BiliApiException` | `Models/Login/BiliApiException.cs` |
+| `BiliMusicDotNet.Models.Exceptions` | `BiliApiException` | `Models/Exceptions/BiliApiException.cs` |
+| `BiliMusicDotNet.Models.Exceptions` | `StorageException` | `Models/Exceptions/StorageException.cs` |
+| `BiliMusicDotNet.Abstracts` | `ICredentialService`（契约） | `Abstracts/ICredentialService.cs` |
+| `BiliMusicDotNet.Services` | `CredentialService`（`sealed`，默认实现） | `Services/CredentialService.cs` |
 
 UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不必引用 `Services`（实现类只出现在组合根）。
 
@@ -335,11 +352,12 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 
 | 构造函数 | 用途 |
 | --- | --- |
-| `BiliLoginService(HttpMessageHandler handler, ILogger<BiliLoginService> logger)` | 完整注入；单元测试与真机探针走这条（可换假传输或代理） |
-| `BiliLoginService(ILogger<BiliLoginService> logger)` | 容器默认选中的一条 |
-| `BiliLoginService()` | XAML 设计器 / 无容器场景，日志落到 `NullLogger` |
+| `BiliLoginService(HttpMessageHandler handler, ILogger<BiliLoginService> logger, ICredentialService credentialService)` | 完整注入；单元测试与真机探针走这条（可换假传输、假存储或代理） |
+| `BiliLoginService(ILogger<BiliLoginService> logger, ICredentialService credentialService)` | 容器默认选中的一条 |
+| `BiliLoginService()` | XAML 设计器 / 无容器场景，日志落到 `NullLogger`，凭据服务走默认路径 |
 
 - **必须注册为 Singleton**：`services.AddSingleton<IBiliLoginService, BiliLoginService>();`。登录态与 `CookieContainer` 都常驻在实例里，Transient/Scoped 会让每次解析都拿到空会话。
+- 凭据服务同样注册为 Singleton，且必须注册：`services.AddSingleton<ICredentialService, CredentialService>();`（见 §4.7）。
 - `Dispose()` 幂等：释放内部 `HttpClient` 与轮询信号量；释放后再调用任何成员抛 `ObjectDisposedException`。
 - 不释放也不会泄漏：服务不持有计时器、后台线程或非托管句柄。
 
@@ -348,9 +366,10 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 | 成员 | 类型 | 语义 |
 | --- | --- | --- |
 | `State` | `LoginState` | 最近一次已知状态，由服务单方推进，UI 只读 |
-| `CurrentCredentials` | `BiliLoginCredentials?` | 当前凭据；未登录或已失效时为 `null` |
 | `CurrentProfile` | `BiliUserProfile?` | 昵称与头像地址；资料接口失败时为 `null`（**登录仍然成立**） |
-| `IsLoggedIn` | `bool` | 等价于 `CurrentCredentials is not null` |
+| `IsLoggedIn` | `bool` | 等价于 `ICredentialService.Current is not null` |
+
+凭据不再由本服务暴露：需要凭据（例如给其它 HTTP 客户端附加登录态）时读 `ICredentialService.Current`。
 
 ### 5.4 事件
 
@@ -368,18 +387,19 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 | --- | --- | --- | --- |
 | `CreateQrSessionAsync(CancellationToken)` | `Task<QrSession>` | `BiliApiException`、`HttpRequestException`、`TaskCanceledException` | `State → WaitingForScan`，触发 `StateChanged` |
 | `PollQrStatusAsync(QrSession, CancellationToken)` | `Task<QrStatusResult>` | `ArgumentNullException`、`HttpRequestException`、`TaskCanceledException` | 单次查询；命中成功时写入 Cookie、发布凭据、`State → LoggedIn` |
-| `WaitForConfirmationAsync(QrSession, IProgress<QrStatusResult>?, CancellationToken)` | `Task<QrLoginResult>` | `ArgumentNullException`、`OperationCanceledException` | 轮询推进状态；成功时抓取资料并触发 `LoginSucceeded` |
-| `GetProfileAsync(CancellationToken)` | `Task<BiliUserProfile?>` | `HttpRequestException`、`TaskCanceledException` | 成功写 `CurrentProfile`；`nav` 返回 `-101` 时清凭据并 `State → Expired` |
+| `WaitForConfirmationAsync(QrSession, IProgress<QrStatusResult>?, CancellationToken)` | `Task<QrLoginResult>` | `ArgumentNullException`、`OperationCanceledException` | 轮询推进状态；成功时落盘凭据、抓取资料并触发 `LoginSucceeded` |
+| `GetProfileAsync(CancellationToken)` | `Task<BiliUserProfile?>` | `HttpRequestException`、`TaskCanceledException` | 成功写 `CurrentProfile`；`nav` 返回 `-101` 时清凭据与磁盘副本并 `State → Expired` |
 | `GetAvatarImageAsync(Uri?, CancellationToken)` | `Task<byte[]?>` | **不抛**（失败一律返回 `null`） | 无 |
-| `TryRestoreSessionAsync(BiliLoginCredentials, CancellationToken)` | `Task<bool>` | `ArgumentNullException` | 写 Cookie 容器与凭据；成功 `State → LoggedIn` 并触发 `LoginSucceeded`，失败清空登录态 |
-| `Logout()` | `void` | — | 清 Cookie 与内存凭据、`State → Idle`、触发 `LoggedOut`；**不调用 B 站登出接口** |
+| `TryRestoreSessionAsync(BiliLoginCredentials, CancellationToken)` | `Task<bool>` | `ArgumentNullException`、`StorageException` | 写 Cookie 容器，并让凭据服务持有与落盘；成功 `State → LoggedIn` 并触发 `LoginSucceeded`，失败清空登录态（含磁盘副本） |
+| `Logout()` | `void` | `StorageException`（删除磁盘副本失败） | 清 Cookie、清内存与磁盘凭据、`State → Idle`、触发 `LoggedOut`；**不调用 B 站登出接口** |
 | `static IsTerminal(LoginState)` | `bool` | — | 纯函数，判定 `LoggedIn` / `Expired` / `TimedOut` / `Failed` |
 
-三条容易踩的边界：
+四条容易踩的边界：
 
-- `PollQrStatusAsync` 是**单次查询**，命中成功时只落地凭据与状态，**不触发 `LoginSucceeded`** —— 该事件由 `WaitForConfirmationAsync` 在抓完资料后触发。
+- `PollQrStatusAsync` 是**单次查询**，命中成功时只组装凭据与状态，**不触发 `LoginSucceeded`** —— 该事件由 `WaitForConfirmationAsync` 在抓完资料后触发。
 - `WaitForConfirmationAsync` **不抛** `BiliApiException`：连续网络失败收敛成 `NetworkFailed` 终局，只有取消会抛。
 - `GetAvatarImageAsync` 连 `HttpRequestException` 都吞掉：头像下载失败不该拖垮已经成立的登录。
+- 登录链路上的 **落盘失败也不抛**：登录已经成立，只记 `LogError`；`Logout()` 与 `TryRestoreSessionAsync` 里的落盘/删除失败则照常抛出。
 
 ### 5.6 数据模型
 
@@ -413,7 +433,7 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 
 | 成员 | 类型 | 说明 |
 | --- | --- | --- |
-| `SessData` | `string` | 等价于账号登录态，**必须加密存储、禁止写日志** |
+| `SessData` | `string` | 等价于账号登录态，持久化为明文、**禁止写日志** |
 | `BiliJct` | `string` | CSRF 令牌，写操作（点赞 / 收藏 / 投币）需作为 `csrf` 参数提交 |
 | `DedeUserId` | `string` | 当前用户 `mid` |
 | `CookieHeader` | `string` | B 站下发的全部 `Set-Cookie` 拼成的 Cookie 头，可直接附加给其它 HTTP 客户端 |
@@ -465,136 +485,26 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 
 ---
 
-## 6. 踩过的坑
-
-### 6.1 登录成功有两种表现形态 ⚠️ 最容易漏
-
-`poll` 成功时 B 站**可能返回 302**（`Location` + `Set-Cookie`，**响应体为空**），
-而不是 `200` + 内层 `code: 0`。两种都要处理：
-
-- `HttpClientHandler.AllowAutoRedirect = false`，否则 302 被自动跟随，`Set-Cookie` 拿不到。
-- **302 路径不能去解析响应体**——初版实现在这里有 bug：解析空 body 直接抛"响应不是合法 JSON"，
-  后来被测试抓到（现由"302 路径解析出全部凭据"用例守住）。
-- 判定顺序：先看 HTTP 状态码是否 3xx，是则只从 `Set-Cookie` 判定成功；否则再解析 JSON 读内层 `code`。
-
-### 6.2 轮询状态读内层 `data.code`，不是外层 `code`
-
-外层 `code` 只表示"接口调用成功"（正常恒为 0），真正的扫码状态在内层 `data.code`。
-只读外层会**永远停在"未扫码"**，直到兜底超时——表现为"扫码了但一直不登录"。
-`QrPollingTests.状态查询_读内层状态码而不是外层` 专门守这条。
-
-### 6.3 Cookie 的域要用 `bilibili.com`，不要用 `passport.bilibili.com`
-
-登录成功后 Cookie 由 `passport.bilibili.com` 下发，但后续业务请求打在 `api.bilibili.com`。
-若把 Cookie 的域记成 `passport.bilibili.com`，它**不会**发给 `api.bilibili.com`，
-表现为"登录成功了，但取不到昵称头像（`nav` 返回 `-101`）"。
-
-实测结论（`UserProfileTests.用户信息_凭据通过Cookie容器发往api域` 断言了这一点）：
-`CookieContainer` 在 `Cookie(name, value, "/", "bilibili.com")` 时会按域后缀匹配，
-`api.bilibili.com` 能收到；因此统一用 `bilibili.com` 即可，无需手工拼 `Cookie` 头。
-
-### 6.4 两个域的 `Referer` 不能混用
-
-- `passport.bilibili.com` 的取码/轮询：`Referer: https://passport.bilibili.com/login`
-- `api.bilibili.com` 与 `hdslb.com` CDN：`Referer: https://www.bilibili.com`
-
-头像 CDN 缺 `Referer` 会直接 **403**。服务内部按接口写死，UI 不需要关心。
-
-### 6.5 `nav` 是特例：未登录时返回 `code: -101`
-
-它既是登录态查询接口，也是 WBI 密钥来源。因此**不能**套用"`code != 0` 即抛错"的统一封装。
-本服务对它的处理是：`-101` → 判定登录态失效 → 清空凭据 + 状态置 `Expired` + 返回 `null`。
-
-### 6.6 `DedeUserID__ckMd5` 这类值含 `=`，`Set-Cookie` 切分要小心
-
-一个 302 响应会带 **4 个** `Set-Cookie` 头。切分时必须：
-
-1. 按 `;` 取第一段（丢掉 `Path` / `Domain` / `HttpOnly`）；
-2. 只按**第一个** `=` 切 name/value（值里可能还有 `=`）。
-
-用 `Split('=')` 全切会导致值被截断。
-
-### 6.7 登录成功也可能"其实没登录"
-
-拿到 Cookie 后立刻调 `nav` 校验：若返回 `-101`，说明凭据不可用（异常情况，例如被风控）。
-此时**不能对外宣称登录成功**——初版实现在这里会返回 `Succeeded` 却带着失效凭据，
-测试 `UserProfileTests.用户信息_凭据到手但nav判定未登录时不谎报成功` 抓到了它，现在返回 `Expired`。
-
-### 6.8 日志里绝不能出现 `SESSDATA`
-
-它等价于账号登录态。服务的日志只出现：Cookie **个数**、`mid`、状态、原始状态码。
-排查时如确需定位，只打印长度或哈希前缀。
-
-### 6.9 工具链坑（环境相关，非业务逻辑）
-
-| 坑 | 现象 | 处理 |
-| --- | --- | --- |
-| Avalonia 构建遥测写用户目录 | `AvaloniaStatsTask` 抛 `UnauthorizedAccessException: ...\AppData\Local\AvaloniaUI\BuildServices\buildtasks.log`，**构建直接失败** | 构建时传 `-p:UsedAvaloniaProducts=`（或同类开关）跳过遥测任务 |
-| VSTest `testhost` 子进程 | `Testhost 进程已退出，但出现错误: Win32Exception (5) 拒绝访问`（`Process.GetProcessHandle`） | 测试项目改用 xunit.v3 + Microsoft.Testing.Platform，`dotnet run` 直接在测试程序集内执行 |
-| `dotnet test` 在 SDK 10 上强制 VSTest | `Testing with VSTest target is no longer supported by Microsoft.Testing.Platform on .NET 10 SDK and later` | 用 `dotnet run --project ...Tests` 作为测试入口；详见测试项目 README |
-| nuget.org 不可达 | `NU1900`、还原失败、无法添加新包依赖 | 只用本机 NuGet 缓存中已有的包版本；测试项目自带离线源脚本 |
-| `dotnet build` 报 NU1900 警告 | 漏洞数据库拉取失败（离线） | 主项目无害；**探针项目开了 `TreatWarningsAsErrors`，NU1900 会被判成错误导致还原失败**，离线构建要加 `-p:NuGetAudit=false` |
-
-### 6.10 契约类型放哪里：从"内嵌在接口里"改为顶层 `Models`
-
-初版为把改动限制在 `IBiliLoginService.cs` / `BiliLoginService.cs` 两个文件内，
-把所有契约类型（`QrSession`、`LoginState`、`BiliLoginCredentials`、事件参数、`BiliApiException`）
-**内嵌在接口里**。代价很快显现：
-
-- C# **不会**把嵌套类型继承给实现类，`BiliLoginService.cs` 顶部得挂 11 行 `using X = IBiliLoginService.X;` 别名；
-- 测试与探针里满屏 `IBiliLoginService.QrSession` 长前缀；
-- UI 层只想用 `BiliUserProfile` 渲染昵称头像，却被迫连整个登录接口一起引用。
-
-现已提升为 `BiliMusicDotNet.Models.Login` 下的**顶层类型**（一个类型一个文件），
-接口只留行为、事件、属性与 `IsTerminal` 终态判定。这是纯重构、无行为变化，32 个测试全绿作回归保护。
-
-> 测试项目与探针项目是"链接源码"而非 `ProjectReference`，两边的 `Models\**\*.cs` 已改为按目录整体链接，
-> 以后新增模型不必再改 csproj。
-
-### 6.11 按子功能分阶段提交的经验
-
-本次实现按"取码 → 轮询 → 用户信息 → 头像 → 生命周期"分阶段提交，每个阶段都是一次可编译、可测的增量。
-这样做的额外收益是：接口文件与测试文件天然按子功能切分，review 时能逐段对照。
-代价是要维护"阶段内不能引用后续阶段的类型"这条纪律（例如轮询阶段不能返回 Profile）。
-
-### 6.12 轮询节奏与"登录后再预热"
-
-登录成功后**不要**立刻批量拉榜单/历史/关注做"预热"，也不要在轮询期间叠加其它内容接口请求——
-`-412` 风控主要发生在登录后的内容接口调用模式上。本服务只调登录链路所需的 3 个接口。
-
-### 6.13 二维码渲染不要自己写，用 QRCoder
-
-真机验证探针需要把二维码画到终端。一开始为了"零依赖"自写了一个极简编码器，结果是花在调试它上面的时间
-远超它省下的那点依赖 —— 二维码有太多"错了也不报错、只是扫不出来"的细节：
-
-| 自写时踩到的坑 | 后果 |
-| --- | --- |
-| 格式信息 BCH 写成"左移一位判第 9 位"的变体 | 15 位串不匹配任何合法码字，图看着正常但扫不动 |
-| 版本 10 起的字符计数指示符是 16 位（1~9 是 8 位），按 8 位算 | 长内容被截断 |
-| 把版本 7 才存在的版本信息区当成保留区（低版本那 36 个模块是数据模块） | 数据位整体错位 24 个模块 |
-| 容量估算只减模式指示符、忘了字符计数字段 | 边界长度选错版本 |
-
-判据留档（L 级 8 个掩码的格式串，可用于校验任何实现）：
-`0x77C4, 0x72F3, 0x7DAA, 0x789D, 0x662F, 0x6318, 0x6C41, 0x6976`。
-
-**结论**：改用 [QRCoder](https://github.com/Shane32/QRCoder)（`AsciiQRCode` 渲染器，不依赖 System.Drawing）。
-这类"标准明确、细节繁多"的编解码，用成熟库远比自写划算；自写唯一的收益是少一个依赖，代价却是几轮难查的调试。
-
----
-
-## 7. 文件清单
+## 6. 文件清单
 
 | 文件 | 作用 |
 | --- | --- |
 | `BiliMusicDotNet/Abstracts/IBiliLoginService.cs` | 契约：方法、事件、属性与 `IsTerminal` 终态判定（不含数据模型） |
-| `BiliMusicDotNet/Models/Login/*.cs` | 数据模型（一个类型一个文件）：`QrSession`、`QrStatusResult`、`QrLoginResult`、`QrLoginOutcome`、`LoginState`、`BiliLoginCredentials`、`BiliUserProfile`、三个事件参数、`BiliApiException` |
-| `BiliMusicDotNet/Services/BiliLoginService.cs` | 实现：取码、轮询、凭据解析、用户信息、头像、恢复/登出 |
+| `BiliMusicDotNet/Abstracts/ICredentialService.cs` | 凭据契约：`Current` + `LoadAsync` / `SaveAsync` / `ClearAsync` |
+| `BiliMusicDotNet/Models/Login/*.cs` | 数据模型（一个类型一个文件）：`QrSession`、`QrStatusResult`、`QrLoginResult`、`QrLoginOutcome`、`LoginState`、`BiliLoginCredentials`、`BiliUserProfile`、三个事件参数 |
+| `BiliMusicDotNet/Models/Exceptions/*.cs` | 异常模型：`BiliApiException`（接口业务码）、`StorageException`（凭据读写失败） |
+| `BiliMusicDotNet/Services/BiliLoginService.cs` | 实现：取码、轮询、凭据组装、用户信息、头像、恢复/登出 |
+| `BiliMusicDotNet/Services/CredentialService.cs` | 实现：凭据的持有、明文落盘与清理 |
 | `BiliMusicDotNet.Tests/QrSessionTests.cs` | 取码测试 |
 | `BiliMusicDotNet.Tests/QrPollingTests.cs` | 轮询与终止出口测试 |
 | `BiliMusicDotNet.Tests/UserProfileTests.cs` | 用户信息抓取测试 |
 | `BiliMusicDotNet.Tests/AvatarTests.cs` | 头像下载测试 |
 | `BiliMusicDotNet.Tests/SessionLifecycleTests.cs` | 恢复、登出、释放测试 |
+| `BiliMusicDotNet.Tests/CredentialStorageTests.cs` | 凭据服务自身的读写与失败边界 |
+| `BiliMusicDotNet.Tests/CredentialPersistenceTests.cs` | 登录 / 登出 / 失效与持久化的联动 |
 | `BiliMusicDotNet.Tests/Support/FakeBiliHandler.cs` | 假 HTTP 传输与预置响应 |
+| `BiliMusicDotNet.Tests/Support/FakeCredentialStore.cs` | 内存凭据替身（可配置落盘失败） |
+| `BiliMusicDotNet.Tests/Support/TempDirectory.cs` | 测试用临时应用数据根目录 |
 | `BiliMusicDotNet.Tests/README.md` | 测试项目入口说明（提交闸门、离线还原） |
 | `tools/LoginQrProbe/Program.cs` | 探针入口与命令行解析 |
 | `tools/LoginQrProbe/ProbeRunner.cs` | 真机链路编排与断言 |
@@ -602,4 +512,5 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 | `tools/LoginQrProbe/OfflineSelfCheck.cs` | 离线自检（用假传输验证探针自身） |
 | `tools/LoginQrProbe/QrConsoleRenderer.cs` | 二维码生成与终端渲染（QRCoder） |
 | `tools/LoginQrProbe/README.md` | 探针用法、选项、断言清单 |
-| `BiliMusicDotNet/DependencyInjection/ServiceCollectionExtensions.cs` | 服务注册（`AddSingleton<IBiliLoginService, BiliLoginService>()`，见 §4.1） |
+| `BiliMusicDotNet/DependencyInjection/ServiceCollectionExtensions.cs` | 服务注册（`ICredentialService` 与 `IBiliLoginService`，见 §4.1） |
+| `docs/Services/Credential/LoginCredentialService文档.md` | 凭据服务文档（存储设计、契约、最小用法） |

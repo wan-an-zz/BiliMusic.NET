@@ -1,6 +1,6 @@
 # BiliMusicDotNet.Tests
 
-登录服务（`BiliLoginService` / `IBiliLoginService`）的 xUnit 测试。
+登录服务（`BiliLoginService` / `IBiliLoginService`）与凭据服务（`CredentialService` / `ICredentialService`）的 xUnit 测试。
 
 ## 怎么跑
 
@@ -13,7 +13,7 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 
 ```
 === TEST EXECUTION SUMMARY ===
-   BiliMusicDotNet.Tests  Total: 32, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
+   BiliMusicDotNet.Tests  Total: 47, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
 ```
 
 **提交前必须全绿（`Failed: 0` 且 `Errors: 0`）**，这是本仓库的提交闸门。
@@ -33,6 +33,9 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 `Support/FakeBiliHandler.cs` 按 URL 返回预置响应（含 302 + `Set-Cookie`），
 并记录每次请求的地址、`Referer`、`Cookie`、UA 供断言。
 
+凭据持久化同样不碰真实用户目录：`Support/TempDirectory.cs` 给每个用例一个临时应用数据根目录，
+`Support/FakeCredentialStore.cs` 则是内存替身（可配置落盘失败），供不关心磁盘的用例使用。
+
 | 测试文件 | 覆盖的子功能 |
 | --- | --- |
 | `QrSessionTests.cs` | 取码：请求特征、二维码内容/轮询凭据返回、业务码非 0、脏响应 |
@@ -40,6 +43,8 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 | `UserProfileTests.cs` | 用户信息：字段解析、Cookie 域、资料接口失败容错、事件载荷 |
 | `AvatarTests.cs` | 头像下载：字节返回、CDN 所需 Referer、403 与网络异常 |
 | `SessionLifecycleTests.cs` | 登录态恢复、登出、资源释放 |
+| `CredentialStorageTests.cs` | 凭据读写：落盘字段、读回、损坏与不完整兜底、清理幂等、写盘失败 |
+| `CredentialPersistenceTests.cs` | 登录/登出/失效与持久化的联动、落盘失败不阻断登录 |
 
 关键回归点（都是"写错了不会崩、只会静默不对"的地方）：
 
@@ -47,6 +52,8 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 - 登录成功有 **302** 与 **200 + code 0** 两种形态，两条路径都要能拿到 Cookie。
 - `.bilibili.com` 的 Cookie 必须能发到 `api.bilibili.com`（否则登录成功但取不到昵称头像）。
 - 取消令牌必须能中断轮询（否则用户关掉界面后仍在空转）。
+- 登录成功必须留下凭据文件，登出与 `nav` 返回 `-101` 时必须把磁盘副本一起删掉。
+- 落盘失败不能让已经成立的登录变成失败（那条路径有过一次真实回归）。
 
 ## 离线还原
 

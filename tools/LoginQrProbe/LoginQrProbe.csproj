@@ -23,7 +23,9 @@
     -->
     <ItemGroup>
         <Compile Include="..\..\BiliMusicDotNet\Abstracts\IBiliLoginService.cs" Link="Linked\IBiliLoginService.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet\Abstracts\ICredentialService.cs" Link="Linked\ICredentialService.cs"/>
         <Compile Include="..\..\BiliMusicDotNet\Services\BiliLoginService.cs" Link="Linked\BiliLoginService.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet\Services\CredentialService.cs" Link="Linked\CredentialService.cs"/>
         <Compile Include="..\..\BiliMusicDotNet\Models\**\*.cs" Link="Linked\Models\%(RecursiveDir)%(Filename)%(Extension)"/>
         <!-- 复用测试项目的假传输做离线自检，避免两处维护同一份预置响应。 -->
         <Compile Include="..\..\BiliMusicDotNet.Tests\Support\FakeBiliHandler.cs" Link="Linked\FakeBiliHandler.cs"/>

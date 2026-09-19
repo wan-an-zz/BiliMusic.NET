@@ -45,7 +45,7 @@ internal static class OfflineSelfCheck
         await RunScenarioAsync("完整成功链路（取码 → 扫码 → 凭据 → 昵称头像 → 头像字节）", async reporter =>
         {
             var handler = FakeBiliHandler.Succeeding();
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
 
             var session = await service.CreateQrSessionAsync();
             reporter.Check(ProbeAssertions.IsValidQrContent(session.Content), "二维码内容是合法 https URL");
@@ -91,7 +91,7 @@ internal static class OfflineSelfCheck
         {
             var handler = new FakeBiliHandler(_ => Responses.Json(
                 """{"code":0,"message":"0","ttl":1,"data":{"url":"not-a-url","qrcode_key":"k"}}"""));
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
 
             var session = await service.CreateQrSessionAsync();
             reporter.Check(!ProbeAssertions.IsValidQrContent(session.Content), "识别出非法内容（负向断言）");
@@ -108,7 +108,7 @@ internal static class OfflineSelfCheck
             var handler = new FakeBiliHandler(url => url.Contains("generate")
                 ? Responses.Json(Responses.GenerateBody)
                 : Responses.Json(Responses.PollBody(Responses.StatusExpired)));
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
 
             var session = await service.CreateQrSessionAsync();
             var result = await service.WaitForConfirmationAsync(session);
@@ -126,7 +126,7 @@ internal static class OfflineSelfCheck
             var handler = new FakeBiliHandler(url => url.Contains("generate")
                 ? Responses.Json(Responses.GenerateBody)
                 : Responses.Json(Responses.PollBody(Responses.StatusNotScanned)));
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
 
             var session = await service.CreateQrSessionAsync();
             var status = await service.PollQrStatusAsync(session);
@@ -147,7 +147,7 @@ internal static class OfflineSelfCheck
                 : url.Contains("/qrcode/poll")
                     ? Responses.Redirect(Responses.SetCookies)
                     : throw new HttpRequestException("模拟资料接口不可用"));
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
 
             var session = await service.CreateQrSessionAsync();
             var result = await service.WaitForConfirmationAsync(session);
@@ -163,7 +163,7 @@ internal static class OfflineSelfCheck
         await RunScenarioAsync("头像 403 时返回空而不抛异常", async reporter =>
         {
             var handler = new FakeBiliHandler(_ => new HttpResponseMessage(System.Net.HttpStatusCode.Forbidden));
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
 
             var bytes = await service.GetAvatarImageAsync(new Uri("https://i0.hdslb.com/bfs/face/demo.jpg"));
 
@@ -177,7 +177,7 @@ internal static class OfflineSelfCheck
         await RunScenarioAsync("失效凭据恢复登录态必须返回 false", async reporter =>
         {
             var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavNotLoggedIn));
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
 
             var credentials = new BiliLoginCredentials(
                 "expired", "expired", "123456", "SESSDATA=expired; bili_jct=expired; DedeUserID=123456");
@@ -189,6 +189,13 @@ internal static class OfflineSelfCheck
             return new ProbeResult { QrContent = "(不需要)" };
         });
     }
+
+    /// <summary>
+    /// 自检专用的凭据服务：路径落在临时目录，避免把测试凭据写进真实用户目录。
+    /// </summary>
+    /// <returns>凭据服务。</returns>
+    private static CredentialService CreateCredentials()
+        => new(Path.Combine(Path.GetTempPath(), "BiliMusicDotNet.LoginQrProbe"), NullLogger<CredentialService>.Instance);
 
     /// <summary>跑一个场景，捕获异常并统计失败数。</summary>
     private static async Task RunScenarioAsync(string name, Func<Reporter, Task<ProbeResult>> body)

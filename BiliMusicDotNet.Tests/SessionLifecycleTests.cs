@@ -15,7 +15,7 @@ public sealed class SessionLifecycleTests
     public async Task 恢复登录态_凭据有效()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         var credentials = new BiliLoginCredentials(
             "demo-sessdata-value",
@@ -36,7 +36,8 @@ public sealed class SessionLifecycleTests
     public async Task 恢复登录态_凭据失效()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavNotLoggedIn));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        var store = new FakeCredentialStore();
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
 
         var credentials = new BiliLoginCredentials(
             "expired", "expired", "123456", "SESSDATA=expired; bili_jct=expired; DedeUserID=123456");
@@ -45,13 +46,15 @@ public sealed class SessionLifecycleTests
 
         Assert.False(restored);
         Assert.False(service.IsLoggedIn, "恢复失败不应残留登录态");
+        Assert.Equal(1, store.ClearCount);
     }
 
     [Fact]
     public async Task 恢复登录态_凭据不完整时直接拒绝()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        var store = new FakeCredentialStore();
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
 
         var credentials = new BiliLoginCredentials("only-sessdata", string.Empty, string.Empty, string.Empty);
 
@@ -59,13 +62,15 @@ public sealed class SessionLifecycleTests
 
         Assert.False(restored);
         Assert.Empty(handler.Requests);
+        Assert.Equal(0, store.ClearCount);
     }
 
     [Fact]
     public async Task 登出_清空本地状态并触发事件()
     {
         var handler = FakeBiliHandler.Succeeding();
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        var credentials = new FakeCredentialStore();
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, credentials);
 
         LoggedOutEventArgs? loggedOut = null;
         service.LoggedOut += (_, e) => loggedOut = e;
@@ -80,13 +85,15 @@ public sealed class SessionLifecycleTests
         Assert.Null(service.CurrentProfile);
         Assert.Equal(LoginState.Idle, service.State);
         Assert.NotNull(loggedOut);
+        Assert.Equal(1, credentials.ClearCount);
+        Assert.Null(credentials.Current);
     }
 
     [Fact]
     public async Task 释放_后续调用抛ObjectDisposedException()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.GenerateBody));
-        var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         service.Dispose();
 

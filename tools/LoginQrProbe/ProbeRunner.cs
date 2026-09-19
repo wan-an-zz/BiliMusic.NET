@@ -54,7 +54,7 @@ internal static class ProbeRunner
             Console.WriteLine("   代理：使用系统代理设置（Windows 上会自动读取 Internet 选项）");
         }
 
-        using var service = new BiliLoginService(handler, logger);
+        using var service = new BiliLoginService(handler, logger, CreateCredentials());
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(options.Timeout);
         var token = timeoutSource.Token;
@@ -232,6 +232,13 @@ internal static class ProbeRunner
 
         return passed == checks.Count ? 0 : 1;
     }
+
+    /// <summary>
+    /// 探针专用的凭据服务：真机验证不写用户目录，凭据只落在临时目录里。
+    /// </summary>
+    /// <returns>凭据服务。</returns>
+    private static CredentialService CreateCredentials()
+        => new(Path.Combine(Path.GetTempPath(), "BiliMusicDotNet.LoginQrProbe"), NullLogger<CredentialService>.Instance);
 
     /// <summary>把二维码内容渲染到控制台。</summary>
     /// <param name="content">二维码内容。</param>

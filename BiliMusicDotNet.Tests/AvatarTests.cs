@@ -16,7 +16,7 @@ public sealed class AvatarTests
     public async Task 头像_以字节返回并带上CDN所需的Referer()
     {
         var handler = new FakeBiliHandler(_ => Responses.Bytes(PngHeader));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         var bytes = await service.GetAvatarImageAsync(
             new Uri("https://i0.hdslb.com/bfs/face/demo.jpg"), TestContext.Current.CancellationToken);
@@ -29,7 +29,7 @@ public sealed class AvatarTests
     public async Task 头像_地址为空时返回空而不发请求()
     {
         var handler = new FakeBiliHandler(_ => Responses.Bytes(PngHeader));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         Assert.Null(await service.GetAvatarImageAsync(null, TestContext.Current.CancellationToken));
         Assert.Empty(handler.Requests);
@@ -42,7 +42,7 @@ public sealed class AvatarTests
     {
         var handler = new FakeBiliHandler(
             _ => new HttpResponseMessage((System.Net.HttpStatusCode)statusCode));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         var bytes = await service.GetAvatarImageAsync(
             new Uri("https://i0.hdslb.com/bfs/face/demo.jpg"), TestContext.Current.CancellationToken);
@@ -57,7 +57,7 @@ public sealed class AvatarTests
         {
             ThrowOnSend = new HttpRequestException("模拟 CDN 不可达"),
         };
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         var bytes = await service.GetAvatarImageAsync(
             new Uri("https://i0.hdslb.com/bfs/face/demo.jpg"), TestContext.Current.CancellationToken);

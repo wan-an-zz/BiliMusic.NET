@@ -22,7 +22,7 @@ public sealed class QrPollingTests
         var handler = new FakeBiliHandler(url => url.Contains("generate")
             ? Responses.Json(Responses.GenerateBody)
             : Responses.Json(Responses.PollBody(Responses.StatusNotScanned)));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var result = await service.PollQrStatusAsync(session, TestContext.Current.CancellationToken);
@@ -40,7 +40,7 @@ public sealed class QrPollingTests
         var handler = new FakeBiliHandler(url => url.Contains("generate")
             ? Responses.Json(Responses.GenerateBody)
             : Responses.Json(Responses.PollBody(Responses.StatusNotConfirmed)));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var result = await service.PollQrStatusAsync(session, TestContext.Current.CancellationToken);
@@ -55,7 +55,7 @@ public sealed class QrPollingTests
         var handler = new FakeBiliHandler(url => url.Contains("generate")
             ? Responses.Json(Responses.GenerateBody)
             : Responses.Json(Responses.PollBody(99999)));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var result = await service.PollQrStatusAsync(session, TestContext.Current.CancellationToken);
@@ -69,7 +69,7 @@ public sealed class QrPollingTests
     public async Task 状态查询_轮询请求带passport域Referer()
     {
         var handler = FakeBiliHandler.Waiting();
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         await service.PollQrStatusAsync(session, TestContext.Current.CancellationToken);
@@ -85,7 +85,7 @@ public sealed class QrPollingTests
         var handler = new FakeBiliHandler(url => url.Contains("generate")
             ? Responses.Json(Responses.GenerateBody)
             : Responses.Json(Responses.PollBody(Responses.StatusExpired)));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var result = await service.WaitForConfirmationAsync(session, cancellationToken: TestContext.Current.CancellationToken);
@@ -99,7 +99,7 @@ public sealed class QrPollingTests
     public async Task 终止_调用方取消时立即退出且不吞掉取消()
     {
         var handler = FakeBiliHandler.Waiting();
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
@@ -112,7 +112,7 @@ public sealed class QrPollingTests
     public async Task 终止_有效期耗尽时兜底超时()
     {
         var handler = FakeBiliHandler.Waiting();
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         // 用一个已过期的会话驱动超时分支：等价于"一次 86038 都没收到"的兜底出口。
         var expiredSession = new QrSession(
@@ -132,7 +132,7 @@ public sealed class QrPollingTests
         {
             ThrowOnSend = new HttpRequestException("模拟断网"),
         };
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         // 取码也走同一个传输，所以先用一个不抛异常的取码结果。
         var session = new QrSession(
@@ -149,7 +149,7 @@ public sealed class QrPollingTests
     public async Task 终止_重复轮询同一二维码不重复触发登录事件()
     {
         var handler = FakeBiliHandler.Succeeding();
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var loginCount = 0;
@@ -167,7 +167,7 @@ public sealed class QrPollingTests
     public async Task 进度回调_每次状态变化都上报()
     {
         var handler = FakeBiliHandler.Succeeding();
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var reports = new List<QrStatusResult>();

@@ -21,6 +21,9 @@ public sealed class FakeBiliHandler(Func<string, HttpResponseMessage> responder)
     /// <summary>联网失败模式下抛出的异常（模拟断网 / DNS 失败）。</summary>
     public Exception? ThrowOnSend { get; init; }
 
+    /// <summary>响应规则；运行中可替换，用于模拟"同一会话里登录态后来失效了"。</summary>
+    public Func<string, HttpResponseMessage> Responder { get; set; } = responder;
+
     /// <summary>构造一个"登录成功"的传输：取码 → 302 + Set-Cookie → nav 返回用户信息。</summary>
     /// <param name="navBody">nav 接口的响应体，默认返回已登录。</param>
     /// <returns>假传输。</returns>
@@ -55,7 +58,7 @@ public sealed class FakeBiliHandler(Func<string, HttpResponseMessage> responder)
 
         return ThrowOnSend is not null
             ? Task.FromException<HttpResponseMessage>(ThrowOnSend)
-            : Task.FromResult(responder(uri));
+            : Task.FromResult(Responder(uri));
     }
 
     // Referer 由 Headers.Referrer 写入、Cookie/UA 走 TryAddWithoutValidation，

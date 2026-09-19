@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -27,7 +28,8 @@ namespace BiliMusicDotNet.Services;
 /// 轮询请求禁用自动重定向，以便直接观察登录成功时的 302 与 <c>Set-Cookie</c>。
 /// </para>
 /// <para>
-/// <b>不落盘</b>：凭据只保存在内存里，加密持久化属于宿主/UI 层责任。
+/// <b>凭据归属</b>：本服务不持有凭据，运行期唯一的读取入口是 <see cref="ICredentialService.Current"/>；
+/// 登录成功时落盘、登出与登录态失效时清理，都由它完成。
 /// </para>
 /// </remarks>
 public sealed class BiliLoginService : IBiliLoginService
@@ -81,6 +83,7 @@ public sealed class BiliLoginService : IBiliLoginService
 
     private readonly object _gate = new();
     private readonly ILogger<BiliLoginService> _logger;
+    private readonly ICredentialService _credentialService;
     private readonly CookieContainer _cookies = new();
 
     /// <summary>保证同一时刻只有一个轮询在跑（同一个 qrcode_key 并发轮询属于异常调用）。</summary>
@@ -92,37 +95,44 @@ public sealed class BiliLoginService : IBiliLoginService
     private HttpClient _http;
     private bool _disposed;
 
-    private BiliLoginCredentials? _credentials;
     private BiliUserProfile? _profile;
     private LoginState _state = LoginState.Idle;
 
     /// <summary>
-    /// 供 XAML 设计器与无容器场景实例化；运行期一律由依赖注入提供日志器。
+    /// 供 XAML 设计器与无容器场景实例化：凭据服务走默认路径，日志落到 <see cref="NullLogger{T}"/>。
     /// </summary>
-    public BiliLoginService() : this(new HttpClientHandler(), NullLogger<BiliLoginService>.Instance)
+    public BiliLoginService()
+        : this(new HttpClientHandler(), NullLogger<BiliLoginService>.Instance, new CredentialService())
     {
     }
 
     /// <summary>
-    /// 由容器创建：日志器由依赖注入提供，HTTP 传输可注入（便于离线单测与代理）。
+    /// 由容器创建：日志器与凭据服务由依赖注入提供，HTTP 传输用默认实现。
     /// </summary>
     /// <param name="logger">日志器。</param>
-    public BiliLoginService(ILogger<BiliLoginService> logger) : this(new HttpClientHandler(), logger)
+    /// <param name="credentialService">凭据的持有者与持久化入口。</param>
+    public BiliLoginService(ILogger<BiliLoginService> logger, ICredentialService credentialService)
+        : this(new HttpClientHandler(), logger, credentialService)
     {
     }
 
     /// <summary>
-    /// 完整构造：显式指定 HTTP 传输与日志器。
+    /// 完整构造：显式指定 HTTP 传输、日志器与凭据服务。
     /// </summary>
     /// <param name="handler">
     /// HTTP 传输。会被包进 <see cref="HttpClient"/> 后由本服务持有并在 <see cref="Dispose"/> 时释放。
     /// </param>
     /// <param name="logger">日志器。</param>
-    /// <exception cref="ArgumentNullException"><paramref name="handler"/> 或 <paramref name="logger"/> 为 <see langword="null"/>。</exception>
-    public BiliLoginService(HttpMessageHandler handler, ILogger<BiliLoginService> logger)
+    /// <param name="credentialService">凭据的持有者与持久化入口；登录结果会写给它。</param>
+    /// <exception cref="ArgumentNullException">任一参数为 <see langword="null"/>。</exception>
+    public BiliLoginService(
+        HttpMessageHandler handler,
+        ILogger<BiliLoginService> logger,
+        ICredentialService credentialService)
     {
         ArgumentNullException.ThrowIfNull(handler);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _credentialService = credentialService ?? throw new ArgumentNullException(nameof(credentialService));
 
         if (handler is HttpClientHandler httpHandler)
         {
@@ -157,19 +167,7 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <inheritdoc />
-    public BiliLoginCredentials? CurrentCredentials
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return _credentials;
-            }
-        }
-    }
-
-    /// <inheritdoc />
-    public bool IsLoggedIn => CurrentCredentials is not null;
+    public bool IsLoggedIn => _credentialService.Current is not null;
 
     /// <inheritdoc />
     public BiliUserProfile? CurrentProfile
@@ -371,6 +369,7 @@ public sealed class BiliLoginService : IBiliLoginService
         {
             _logger.LogWarning("用户信息查询失败：code={Code}，判定登录态失效", result.Code);
             ClearSession();
+            ClearPersistedCredentialsSafely();
             SetState(LoginState.Expired, "登录已失效，请重新扫码登录", profile: null);
             return null;
         }
@@ -466,14 +465,13 @@ public sealed class BiliLoginService : IBiliLoginService
         SetCookie("bili_jct", credentials.BiliJct);
         SetCookie("DedeUserID", credentials.DedeUserId);
 
-        lock (_gate)
-        {
-            _credentials = credentials;
-        }
+        // 恢复成功要以"凭据服务持有它"为前提：调用方可能是先 Load 再恢复，也可能自己组装了凭据。
+        await _credentialService.SaveAsync(credentials, cancellationToken).ConfigureAwait(false);
 
         var profile = await GetProfileAsync(cancellationToken).ConfigureAwait(false);
         if (profile is null)
         {
+            // GetProfileAsync 判定失效时已经清过凭据，这里只负责告知调用方恢复失败。
             _logger.LogInformation("恢复登录态失败：凭据已失效");
             return false;
         }
@@ -499,6 +497,10 @@ public sealed class BiliLoginService : IBiliLoginService
         }
 
         ClearSession();
+
+        // 磁盘副本删不掉时向上暴露：Cookie 与内存态已清干净，但本地仍留着等价于登录态的凭据。
+        _credentialService.ClearAsync().GetAwaiter().GetResult();
+
         _logger.LogInformation("已登出并清除本地登录态");
         SetState(LoginState.Idle, "已退出登录", profile: null);
 
@@ -556,13 +558,10 @@ public sealed class BiliLoginService : IBiliLoginService
         if (IsRedirect(response.StatusCode))
         {
             _logger.LogDebug("轮询命中重定向（HTTP {Status}），按登录成功处理", (int)response.StatusCode);
-            if (PublishCredentials(setCookies) is null)
-            {
-                CaptureCredentialsFromCookieContainer();
-            }
+            var credentials = PublishCredentials(setCookies) ?? CaptureCredentialsFromCookieContainer();
 
             result = new QrStatusResult(
-                LoginState.LoggedIn, RawSuccess, ResolveMessage(RawSuccess, null), CurrentCredentials);
+                LoginState.LoggedIn, RawSuccess, ResolveMessage(RawSuccess, null), credentials);
         }
         else
         {
@@ -588,8 +587,7 @@ public sealed class BiliLoginService : IBiliLoginService
             if (state == LoginState.LoggedIn)
             {
                 // 200 + code 0 的路径：Cookie 同样在响应头里。
-                PublishCredentials(setCookies);
-                credentials = CurrentCredentials;
+                credentials = PublishCredentials(setCookies);
             }
 
             result = new QrStatusResult(state, rawStatus, message, credentials);
@@ -632,7 +630,7 @@ public sealed class BiliLoginService : IBiliLoginService
         // 同一个 key 只完成一次：重入的轮询不该重复触发登录事件。
         if (_processedKeys.Contains(session.Key))
         {
-            var existing = CurrentCredentials;
+            var existing = _credentialService.Current;
             return existing is null
                 ? new QrLoginResult(QrLoginOutcome.Expired, null, null, "该二维码已使用，请重新获取")
                 : new QrLoginResult(QrLoginOutcome.Succeeded, existing, CurrentProfile, "登录成功");
@@ -641,8 +639,8 @@ public sealed class BiliLoginService : IBiliLoginService
         _processedKeys.Enqueue(session.Key);
 
         // 302 路径下 Set-Cookie 一定存在；兜底的是"响应头没给、但 Cookie 容器已持有"的特殊情况。
-        BiliLoginCredentials? credentials = status.Credentials ?? CurrentCredentials;
-        credentials ??= CaptureCredentialsFromCookieContainer();
+        BiliLoginCredentials? credentials = status.Credentials
+            ?? CaptureCredentialsFromCookieContainer();
 
         if (credentials is null || !credentials.IsComplete)
         {
@@ -651,10 +649,8 @@ public sealed class BiliLoginService : IBiliLoginService
             return Fail(LoginState.Failed, "登录失败：未能获取登录凭据，请重试", QrLoginOutcome.NetworkFailed);
         }
 
-        lock (_gate)
-        {
-            _credentials = credentials;
-        }
+        // 落盘失败不回滚已成立的登录：用户手机上确实已经确认过了，交给调用方按日志排查。
+        await SaveCredentialSafelyAsync(credentials, cancellationToken).ConfigureAwait(false);
 
         // 资料接口失败不影响"登录已成立"这一事实：凭据已经拿到了。
         BiliUserProfile? profile = null;
@@ -667,10 +663,12 @@ public sealed class BiliLoginService : IBiliLoginService
             _logger.LogWarning(ex, "登录成功但用户信息拉取失败，UI 可稍后重试");
         }
 
-        if (profile is null && !HasCredentials())
+        if (profile is null && _credentialService.Current is null)
         {
             // GetProfileAsync 拿到 -101 时会判定登录态失效并清空凭据：此时不能对外宣称"登录成功"。
             _logger.LogWarning("扫码已确认，但登录态校验未通过（nav 返回未登录）");
+            ClearSession();
+            ClearPersistedCredentialsSafely();
             return Fail(LoginState.Expired, "登录未通过校验，请重新扫码", QrLoginOutcome.Expired);
         }
 
@@ -682,14 +680,36 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <summary>
-    /// 当前是否仍持有凭据（用于判断 <see cref="GetProfileAsync"/> 的失败是"网络问题"还是"登录态被判定失效"）。
+    /// 保存凭据并落盘；失败只记日志，不改变"登录已成立"这个结论。
     /// </summary>
-    /// <returns>凭据仍存在时为 <see langword="true"/>。</returns>
-    private bool HasCredentials()
+    /// <param name="credentials">本次登录取得的凭据。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    private async Task SaveCredentialSafelyAsync(
+        BiliLoginCredentials credentials,
+        CancellationToken cancellationToken)
     {
-        lock (_gate)
+        try
         {
-            return _credentials is not null;
+            await _credentialService.SaveAsync(credentials, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is StorageException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogError(ex, "登录已成立但凭据未能落盘，下次启动将无法自动登录");
+        }
+    }
+
+    /// <summary>
+    /// 清理本地的凭据副本；失败只记日志——清理是登录态失效的附属动作，不该反客为主。
+    /// </summary>
+    private void ClearPersistedCredentialsSafely()
+    {
+        try
+        {
+            _credentialService.ClearAsync().GetAwaiter().GetResult();
+        }
+        catch (Exception ex) when (ex is StorageException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(ex, "凭据副本清理失败，本地可能仍留有等价于登录态的文件");
         }
     }
 
@@ -1143,13 +1163,12 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <summary>
-    /// 清空内存中的登录态（凭据与用户信息）。
+    /// 清空内存中的用户信息；凭据的清理走 <see cref="ICredentialService"/>。
     /// </summary>
     private void ClearSession()
     {
         lock (_gate)
         {
-            _credentials = null;
             _profile = null;
         }
     }

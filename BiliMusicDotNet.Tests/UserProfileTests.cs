@@ -20,7 +20,7 @@ public sealed class UserProfileTests
     public async Task 用户信息_登录成功后抓取昵称与头像并升为https()
     {
         var handler = FakeBiliHandler.Succeeding();
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var result = await service.WaitForConfirmationAsync(
@@ -39,7 +39,7 @@ public sealed class UserProfileTests
     public async Task 用户信息_凭据通过Cookie容器发往api域()
     {
         var handler = FakeBiliHandler.Succeeding();
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         await service.WaitForConfirmationAsync(session, cancellationToken: TestContext.Current.CancellationToken);
@@ -60,7 +60,7 @@ public sealed class UserProfileTests
             : url.Contains("/qrcode/poll")
                 ? Responses.Redirect(Responses.SetCookies)
                 : throw new HttpRequestException("模拟资料接口不可用"));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var result = await service.WaitForConfirmationAsync(
@@ -80,7 +80,8 @@ public sealed class UserProfileTests
             : url.Contains("/qrcode/poll")
                 ? Responses.Json(Responses.PollBody(Responses.StatusSuccess), Responses.SetCookies)
                 : Responses.Json(Responses.NavNotLoggedIn));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        var store = new FakeCredentialStore();
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var result = await service.WaitForConfirmationAsync(
@@ -88,13 +89,14 @@ public sealed class UserProfileTests
 
         Assert.Equal(QrLoginOutcome.Expired, result.Outcome);
         Assert.False(service.IsLoggedIn, "校验未通过时必须清空登录态，不能让 UI 继续显示已登录");
+        Assert.Null(store.Current);
     }
 
     [Fact]
     public async Task 用户信息_触发StateChanged与LoginSucceeded()
     {
         var handler = FakeBiliHandler.Succeeding();
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         var states = new List<LoginState>();
         LoginSucceededEventArgs? succeeded = null;

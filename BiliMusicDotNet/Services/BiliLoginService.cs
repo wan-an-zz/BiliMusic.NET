@@ -9,22 +9,9 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Login;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-
-// 契约类型是嵌套在接口里的：C# 的嵌套类型不被实现类继承，因此在本文件顶部做一次别名，
-// 让下面的实现代码保持可读（对外暴露的类型名仍是 IBiliLoginService.XXX）。
-using BiliApiException = BiliMusicDotNet.Abstracts.IBiliLoginService.BiliApiException;
-using BiliLoginCredentials = BiliMusicDotNet.Abstracts.IBiliLoginService.BiliLoginCredentials;
-using BiliUserProfile = BiliMusicDotNet.Abstracts.IBiliLoginService.BiliUserProfile;
-using LoggedOutEventArgs = BiliMusicDotNet.Abstracts.IBiliLoginService.LoggedOutEventArgs;
-using LoginState = BiliMusicDotNet.Abstracts.IBiliLoginService.LoginState;
-using LoginStateChangedEventArgs = BiliMusicDotNet.Abstracts.IBiliLoginService.LoginStateChangedEventArgs;
-using LoginSucceededEventArgs = BiliMusicDotNet.Abstracts.IBiliLoginService.LoginSucceededEventArgs;
-using QrLoginOutcome = BiliMusicDotNet.Abstracts.IBiliLoginService.QrLoginOutcome;
-using QrLoginResult = BiliMusicDotNet.Abstracts.IBiliLoginService.QrLoginResult;
-using QrSession = BiliMusicDotNet.Abstracts.IBiliLoginService.QrSession;
-using QrStatusResult = BiliMusicDotNet.Abstracts.IBiliLoginService.QrStatusResult;
 
 namespace BiliMusicDotNet.Services;
 
@@ -39,7 +26,7 @@ namespace BiliMusicDotNet.Services;
 /// 轮询请求禁用自动重定向，以便直接观察登录成功时的 302 与 <c>Set-Cookie</c>。
 /// </para>
 /// <para>
-/// <b>不落盘</b>：凭据只保存在内存里，加密持久化属于宿主/UI 层责任，见接口备注。
+/// <b>不落盘</b>：凭据只保存在内存里，加密持久化属于宿主/UI 层责任。
 /// </para>
 /// </remarks>
 public sealed class BiliLoginService : IBiliLoginService

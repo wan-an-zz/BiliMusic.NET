@@ -1,5 +1,5 @@
 using System.Text;
-using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Login;
 
 namespace BiliMusicDotNet.Tools.LoginQrProbe;
 
@@ -40,7 +40,7 @@ internal static class ProbeAssertions
     /// </summary>
     /// <param name="session">取码结果。</param>
     /// <returns>合理时为 <see langword="true"/>。</returns>
-    public static bool HasReasonableLifetime(IBiliLoginService.QrSession session)
+    public static bool HasReasonableLifetime(QrSession session)
     {
         var lifetime = session.ExpiresAt - DateTimeOffset.Now;
         return lifetime >= MinLifetime && lifetime <= MaxLifetime;
@@ -60,10 +60,10 @@ internal sealed class ProbeResult
     public int PollCount { get; init; }
 
     /// <summary>登录凭据（仅内存持有，报告里会脱敏）。</summary>
-    public IBiliLoginService.BiliLoginCredentials? Credentials { get; init; }
+    public BiliLoginCredentials? Credentials { get; init; }
 
     /// <summary>用户信息。</summary>
-    public IBiliLoginService.BiliUserProfile? Profile { get; init; }
+    public BiliUserProfile? Profile { get; init; }
 
     /// <summary>头像字节数。</summary>
     public int AvatarBytes { get; init; }

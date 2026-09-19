@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
 using BiliMusicDotNet.Tests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -33,13 +34,13 @@ public sealed class QrSessionTests
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.GenerateBody));
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
-        var states = new List<IBiliLoginService.LoginState>();
+        var states = new List<LoginState>();
         service.StateChanged += (_, e) => states.Add(e.State);
 
         await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(IBiliLoginService.LoginState.WaitingForScan, service.State);
-        Assert.Equal([IBiliLoginService.LoginState.WaitingForScan], states);
+        Assert.Equal(LoginState.WaitingForScan, service.State);
+        Assert.Equal([LoginState.WaitingForScan], states);
     }
 
     [Fact]
@@ -67,11 +68,11 @@ public sealed class QrSessionTests
             _ => Responses.Json($$"""{"code":{{code}},"message":"{{message}}","ttl":1}"""));
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
-        var exception = await Assert.ThrowsAsync<IBiliLoginService.BiliApiException>(
+        var exception = await Assert.ThrowsAsync<BiliApiException>(
             () => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(code, exception.Code);
-        Assert.Equal(IBiliLoginService.LoginState.Idle, service.State);
+        Assert.Equal(LoginState.Idle, service.State);
     }
 
     [Fact]
@@ -80,7 +81,7 @@ public sealed class QrSessionTests
         var handler = new FakeBiliHandler(_ => Responses.Json("""{"code":0,"message":"0","ttl":1,"data":{}}"""));
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
-        await Assert.ThrowsAsync<IBiliLoginService.BiliApiException>(() => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<BiliApiException>(() => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -93,6 +94,6 @@ public sealed class QrSessionTests
         });
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
-        await Assert.ThrowsAsync<IBiliLoginService.BiliApiException>(() => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<BiliApiException>(() => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
     }
 }

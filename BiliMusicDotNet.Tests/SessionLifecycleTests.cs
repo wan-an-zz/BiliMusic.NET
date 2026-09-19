@@ -1,4 +1,5 @@
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
 using BiliMusicDotNet.Tests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,7 +17,7 @@ public sealed class SessionLifecycleTests
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn));
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
-        var credentials = new IBiliLoginService.BiliLoginCredentials(
+        var credentials = new BiliLoginCredentials(
             "demo-sessdata-value",
             "demo-jct-value",
             "123456",
@@ -26,7 +27,7 @@ public sealed class SessionLifecycleTests
 
         Assert.True(restored);
         Assert.True(service.IsLoggedIn);
-        Assert.Equal(IBiliLoginService.LoginState.LoggedIn, service.State);
+        Assert.Equal(LoginState.LoggedIn, service.State);
         Assert.Equal(123456, service.CurrentProfile?.Mid);
         Assert.Contains("bili_jct=demo-jct-value", handler.Requests[^1].Cookie ?? string.Empty, StringComparison.Ordinal);
     }
@@ -37,7 +38,7 @@ public sealed class SessionLifecycleTests
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavNotLoggedIn));
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
-        var credentials = new IBiliLoginService.BiliLoginCredentials(
+        var credentials = new BiliLoginCredentials(
             "expired", "expired", "123456", "SESSDATA=expired; bili_jct=expired; DedeUserID=123456");
 
         var restored = await service.TryRestoreSessionAsync(credentials, TestContext.Current.CancellationToken);
@@ -52,7 +53,7 @@ public sealed class SessionLifecycleTests
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn));
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
-        var credentials = new IBiliLoginService.BiliLoginCredentials("only-sessdata", string.Empty, string.Empty, string.Empty);
+        var credentials = new BiliLoginCredentials("only-sessdata", string.Empty, string.Empty, string.Empty);
 
         var restored = await service.TryRestoreSessionAsync(credentials, TestContext.Current.CancellationToken);
 
@@ -66,7 +67,7 @@ public sealed class SessionLifecycleTests
         var handler = FakeBiliHandler.Succeeding();
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
-        IBiliLoginService.LoggedOutEventArgs? loggedOut = null;
+        LoggedOutEventArgs? loggedOut = null;
         service.LoggedOut += (_, e) => loggedOut = e;
 
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
@@ -77,7 +78,7 @@ public sealed class SessionLifecycleTests
 
         Assert.False(service.IsLoggedIn);
         Assert.Null(service.CurrentProfile);
-        Assert.Equal(IBiliLoginService.LoginState.Idle, service.State);
+        Assert.Equal(LoginState.Idle, service.State);
         Assert.NotNull(loggedOut);
     }
 

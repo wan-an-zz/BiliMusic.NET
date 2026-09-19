@@ -1,4 +1,4 @@
-using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
 using BiliMusicDotNet.Tests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -54,7 +54,7 @@ internal static class OfflineSelfCheck
             probeRender(session.Content);
 
             var result = await service.WaitForConfirmationAsync(session);
-            reporter.Check(result.Outcome == IBiliLoginService.QrLoginOutcome.Succeeded, "终局为 Succeeded");
+            reporter.Check(result.Outcome == QrLoginOutcome.Succeeded, "终局为 Succeeded");
             reporter.Check(result.Credentials?.IsComplete == true, "凭据三件套齐备");
             reporter.Check(result.Profile?.Nickname == "测试用户", "取到昵称");
             reporter.Check(result.Profile?.AvatarUri is not null, "取到头像地址");
@@ -113,7 +113,7 @@ internal static class OfflineSelfCheck
             var session = await service.CreateQrSessionAsync();
             var result = await service.WaitForConfirmationAsync(session);
 
-            reporter.Check(result.Outcome == IBiliLoginService.QrLoginOutcome.Expired, "终局为 Expired");
+            reporter.Check(result.Outcome == QrLoginOutcome.Expired, "终局为 Expired");
             reporter.Check(handler.PollCount == 1, "失效后立即停止轮询");
             return new ProbeResult { QrContent = session.Content, PollCount = handler.PollCount };
         });
@@ -131,7 +131,7 @@ internal static class OfflineSelfCheck
             var session = await service.CreateQrSessionAsync();
             var status = await service.PollQrStatusAsync(session);
 
-            reporter.Check(status.State == IBiliLoginService.LoginState.WaitingForScan, "未扫码状态映射正确");
+            reporter.Check(status.State == LoginState.WaitingForScan, "未扫码状态映射正确");
             reporter.Check(status.RawStatus == Responses.StatusNotScanned, "原始状态码为 86101");
             reporter.Check(status.Credentials is null, "未扫码时没有凭据");
             return new ProbeResult { QrContent = session.Content, PollCount = handler.PollCount };
@@ -152,7 +152,7 @@ internal static class OfflineSelfCheck
             var session = await service.CreateQrSessionAsync();
             var result = await service.WaitForConfirmationAsync(session);
 
-            reporter.Check(result.Outcome == IBiliLoginService.QrLoginOutcome.Succeeded, "登录仍然成功");
+            reporter.Check(result.Outcome == QrLoginOutcome.Succeeded, "登录仍然成功");
             reporter.Check(result.Profile is null, "资料为空但不谎报失败");
             return new ProbeResult { QrContent = session.Content, Credentials = result.Credentials };
         });
@@ -179,7 +179,7 @@ internal static class OfflineSelfCheck
             var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavNotLoggedIn));
             using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
-            var credentials = new IBiliLoginService.BiliLoginCredentials(
+            var credentials = new BiliLoginCredentials(
                 "expired", "expired", "123456", "SESSDATA=expired; bili_jct=expired; DedeUserID=123456");
 
             var restored = await service.TryRestoreSessionAsync(credentials);

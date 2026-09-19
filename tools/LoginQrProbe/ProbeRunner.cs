@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text;
-using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -59,12 +59,12 @@ internal static class ProbeRunner
         timeoutSource.CancelAfter(options.Timeout);
         var token = timeoutSource.Token;
 
-        var progress = new Progress<IBiliLoginService.QrStatusResult>(status =>
+        var progress = new Progress<QrStatusResult>(status =>
             Console.WriteLine($"   [{DateTime.Now:HH:mm:ss}] {Describe(status.State)}  {status.Message}"));
 
         service.StateChanged += (_, e) =>
         {
-            if (e.State is IBiliLoginService.LoginState.LoggedIn)
+            if (e.State is LoginState.LoggedIn)
             {
                 Console.WriteLine($"   [{DateTime.Now:HH:mm:ss}] 状态 → {e.State}");
             }
@@ -72,7 +72,7 @@ internal static class ProbeRunner
 
         // ---- 第 1 步：取码 ----
         Console.WriteLine("[1/5] 取码…");
-        IBiliLoginService.QrSession session;
+        QrSession session;
         try
         {
             session = await service.CreateQrSessionAsync(token);
@@ -116,7 +116,7 @@ internal static class ProbeRunner
         // ---- 第 3 步：轮询 ----
         Console.WriteLine("[3/5] 等待扫码（Ctrl+C 可随时中止）…");
         var stopwatch = Stopwatch.StartNew();
-        IBiliLoginService.QrLoginResult login;
+        QrLoginResult login;
         try
         {
             login = await service.WaitForConfirmationAsync(session, progress, token);
@@ -135,9 +135,9 @@ internal static class ProbeRunner
         stopwatch.Stop();
         Console.WriteLine();
         Console.WriteLine($"   终局：{login.Outcome}（耗时 {stopwatch.Elapsed.TotalSeconds:0.#} 秒）");
-        checks.Add((login.Outcome == IBiliLoginService.QrLoginOutcome.Succeeded, $"轮询终局为 Succeeded（实际 {login.Outcome}）"));
+        checks.Add((login.Outcome == QrLoginOutcome.Succeeded, $"轮询终局为 Succeeded（实际 {login.Outcome}）"));
 
-        if (login.Outcome != IBiliLoginService.QrLoginOutcome.Succeeded)
+        if (login.Outcome != QrLoginOutcome.Succeeded)
         {
             Console.WriteLine($"   {login.Message}");
             Console.WriteLine();
@@ -253,14 +253,14 @@ internal static class ProbeRunner
     }
 
     /// <summary>状态的中文短标签。</summary>
-    private static string Describe(IBiliLoginService.LoginState state) => state switch
+    private static string Describe(LoginState state) => state switch
     {
-        IBiliLoginService.LoginState.WaitingForScan => "待扫码",
-        IBiliLoginService.LoginState.WaitingForConfirm => "待确认",
-        IBiliLoginService.LoginState.LoggedIn => "已登录",
-        IBiliLoginService.LoginState.Expired => "已失效",
-        IBiliLoginService.LoginState.TimedOut => "已超时",
-        IBiliLoginService.LoginState.Failed => "已失败",
+        LoginState.WaitingForScan => "待扫码",
+        LoginState.WaitingForConfirm => "待确认",
+        LoginState.LoggedIn => "已登录",
+        LoginState.Expired => "已失效",
+        LoginState.TimedOut => "已超时",
+        LoginState.Failed => "已失败",
         _ => state.ToString(),
     };
 }

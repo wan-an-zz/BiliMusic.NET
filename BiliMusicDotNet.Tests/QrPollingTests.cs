@@ -1,5 +1,6 @@
 using System.Linq;
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
 using BiliMusicDotNet.Tests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -27,7 +28,7 @@ public sealed class QrPollingTests
         var result = await service.PollQrStatusAsync(session, TestContext.Current.CancellationToken);
 
         // 外层 code 是 0（接口调用成功），若按外层判断会被误判成"登录成功"。
-        Assert.Equal(IBiliLoginService.LoginState.WaitingForScan, result.State);
+        Assert.Equal(LoginState.WaitingForScan, result.State);
         Assert.Equal(Responses.StatusNotScanned, result.RawStatus);
         Assert.Null(result.Credentials);
         Assert.Contains("扫描", result.Message, StringComparison.Ordinal);
@@ -44,8 +45,8 @@ public sealed class QrPollingTests
 
         var result = await service.PollQrStatusAsync(session, TestContext.Current.CancellationToken);
 
-        Assert.Equal(IBiliLoginService.LoginState.WaitingForConfirm, result.State);
-        Assert.Equal(IBiliLoginService.LoginState.WaitingForConfirm, service.State);
+        Assert.Equal(LoginState.WaitingForConfirm, result.State);
+        Assert.Equal(LoginState.WaitingForConfirm, service.State);
     }
 
     [Fact]
@@ -59,7 +60,7 @@ public sealed class QrPollingTests
 
         var result = await service.PollQrStatusAsync(session, TestContext.Current.CancellationToken);
 
-        Assert.Equal(IBiliLoginService.LoginState.WaitingForScan, result.State);
+        Assert.Equal(LoginState.WaitingForScan, result.State);
         Assert.Equal(99999, result.RawStatus);
         Assert.Contains("99999", result.Message, StringComparison.Ordinal);
     }
@@ -89,8 +90,8 @@ public sealed class QrPollingTests
 
         var result = await service.WaitForConfirmationAsync(session, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(IBiliLoginService.QrLoginOutcome.Expired, result.Outcome);
-        Assert.Equal(IBiliLoginService.LoginState.Expired, service.State);
+        Assert.Equal(QrLoginOutcome.Expired, result.Outcome);
+        Assert.Equal(LoginState.Expired, service.State);
         Assert.Equal(1, handler.PollCount);
     }
 
@@ -114,13 +115,13 @@ public sealed class QrPollingTests
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
         // 用一个已过期的会话驱动超时分支：等价于"一次 86038 都没收到"的兜底出口。
-        var expiredSession = new IBiliLoginService.QrSession(
+        var expiredSession = new QrSession(
             Responses.QrKey, Responses.QrUrl, DateTimeOffset.Now.AddSeconds(-1));
 
         var result = await service.WaitForConfirmationAsync(expiredSession, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(IBiliLoginService.QrLoginOutcome.TimedOut, result.Outcome);
-        Assert.Equal(IBiliLoginService.LoginState.TimedOut, service.State);
+        Assert.Equal(QrLoginOutcome.TimedOut, result.Outcome);
+        Assert.Equal(LoginState.TimedOut, service.State);
         Assert.Equal(0, handler.PollCount);
     }
 
@@ -134,13 +135,13 @@ public sealed class QrPollingTests
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
 
         // 取码也走同一个传输，所以先用一个不抛异常的取码结果。
-        var session = new IBiliLoginService.QrSession(
+        var session = new QrSession(
             Responses.QrKey, Responses.QrUrl, DateTimeOffset.Now.AddMinutes(3));
 
         var result = await service.WaitForConfirmationAsync(session, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(IBiliLoginService.QrLoginOutcome.NetworkFailed, result.Outcome);
-        Assert.Equal(IBiliLoginService.LoginState.Failed, service.State);
+        Assert.Equal(QrLoginOutcome.NetworkFailed, result.Outcome);
+        Assert.Equal(LoginState.Failed, service.State);
         Assert.Equal(5, handler.PollCount); // 少量抖动应重试，不是一次失败就放弃
     }
 
@@ -157,8 +158,8 @@ public sealed class QrPollingTests
         var first = await service.WaitForConfirmationAsync(session, cancellationToken: TestContext.Current.CancellationToken);
         var second = await service.WaitForConfirmationAsync(session, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(IBiliLoginService.QrLoginOutcome.Succeeded, first.Outcome);
-        Assert.Equal(IBiliLoginService.QrLoginOutcome.Succeeded, second.Outcome);
+        Assert.Equal(QrLoginOutcome.Succeeded, first.Outcome);
+        Assert.Equal(QrLoginOutcome.Succeeded, second.Outcome);
         Assert.Equal(1, loginCount);
     }
 
@@ -169,18 +170,18 @@ public sealed class QrPollingTests
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
-        var reports = new List<IBiliLoginService.QrStatusResult>();
+        var reports = new List<QrStatusResult>();
         await service.WaitForConfirmationAsync(session, new SyncProgress(reports), TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(reports);
-        Assert.Equal(IBiliLoginService.LoginState.LoggedIn, reports[^1].State);
+        Assert.Equal(LoginState.LoggedIn, reports[^1].State);
     }
 
     /// <summary>同步的 <see cref="IProgress{T}"/>，避免回调被 post 到线程池后断言时机不确定。</summary>
     /// <param name="sink">接收上报结果的集合。</param>
-    private sealed class SyncProgress(List<IBiliLoginService.QrStatusResult> sink)
-        : IProgress<IBiliLoginService.QrStatusResult>
+    private sealed class SyncProgress(List<QrStatusResult> sink)
+        : IProgress<QrStatusResult>
     {
-        public void Report(IBiliLoginService.QrStatusResult value) => sink.Add(value);
+        public void Report(QrStatusResult value) => sink.Add(value);
     }
 }

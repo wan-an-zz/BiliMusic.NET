@@ -39,5 +39,6 @@
     <ItemGroup>
         <Compile Include="..\BiliMusicDotNet\Abstracts\IBiliLoginService.cs" Link="Linked\IBiliLoginService.cs"/>
         <Compile Include="..\BiliMusicDotNet\Services\BiliLoginService.cs" Link="Linked\BiliLoginService.cs"/>
+        <Compile Include="..\BiliMusicDotNet\Models\**\*.cs" Link="Linked\Models\%(RecursiveDir)%(Filename)%(Extension)"/>
     </ItemGroup>
 </Project>

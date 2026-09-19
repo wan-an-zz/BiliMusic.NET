@@ -30,4 +30,8 @@
         <PackageReference Include="NLog.Extensions.Logging" />
         <PackageReference Include="SukiUI" />
     </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Models\Login\" />
+    </ItemGroup>
 </Project>

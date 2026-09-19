@@ -32,6 +32,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Folder Include="Models\Exceptions\" />
       <Folder Include="Models\Login\" />
     </ItemGroup>
 </Project>

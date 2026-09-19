@@ -1,6 +1,6 @@
 using System;
 
-namespace BiliMusicDotNet.Models.Login;
+namespace BiliMusicDotNet.Models.Exceptions;
 
 /// <summary>
 /// B 站接口返回非 0 业务码时抛出。

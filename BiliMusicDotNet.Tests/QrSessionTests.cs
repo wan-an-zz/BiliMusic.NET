@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Exceptions;
 using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
 using BiliMusicDotNet.Tests.Support;

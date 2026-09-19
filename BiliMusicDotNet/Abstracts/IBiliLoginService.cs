@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using BiliMusicDotNet.Models.Exceptions;
 using BiliMusicDotNet.Models.Login;
 
 namespace BiliMusicDotNet.Abstracts;

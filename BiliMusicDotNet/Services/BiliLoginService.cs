@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Exceptions;
 using BiliMusicDotNet.Models.Login;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

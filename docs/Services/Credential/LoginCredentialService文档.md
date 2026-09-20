@@ -40,7 +40,7 @@
 
 ```powershell
 dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
-# 判定依据：Total: 47, Errors: 0, Failed: 0
+# 判定依据：Total: 49, Errors: 0, Failed: 0
 ```
 
 ### 2.3 子功能与测试对照表
@@ -48,15 +48,16 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 | # | 子功能 | 实现位置 | 测试 | 用例数 |
 | --- | --- | --- | --- | --- |
 | 1 | 凭据落盘（明文 JSON、原子写） | `CredentialService.SaveAsync` | `CredentialStorageTests` / `CredentialPersistenceTests.登录成功后*` | 3 |
-| 2 | 凭据读回（含 `Current` 写入） | `CredentialService.LoadAsync` | `CredentialStorageTests.保存后*` / `*读回*` | 3 |
+| 2 | 凭据读回（写进 `Current`） | `CredentialService.LoadAsync` | `CredentialStorageTests.保存后*` / `读回的结果*` | 2 |
 | 3 | 只读语义（不建目录） | `CredentialService.LoadAsync` | `CredentialStorageTests.文件不存在时*` | 1 |
 | 4 | 损坏与不完整数据的兜底 | `CredentialService.LoadAsync` | `CredentialStorageTests.JSON损坏时*` / `凭据不完整时*` | 2 |
 | 5 | 清理与幂等 | `CredentialService.ClearAsync` | `CredentialStorageTests.清理后*` / `CredentialPersistenceTests.登出后*` | 2 |
 | 6 | 写盘失败的异常契约 | `CredentialService.SaveAsync` | `CredentialStorageTests.目录不可写时*` | 1 |
 | 7 | 路径解析 | `CredentialService.ResolveFilePath` | `CredentialStorageTests.默认路径*` | 1 |
-| 8 | 登录成功自动落盘 | `BiliLoginService.CompleteLoginAsync` | `CredentialPersistenceTests` | 3 |
-| 9 | 失效时清理磁盘副本 | `BiliLoginService.GetProfileAsync` | `CredentialPersistenceTests.nav判定失效时*` | 1 |
-| 10 | 落盘失败不阻断登录 | `BiliLoginService.SaveCredentialSafelyAsync` | `CredentialPersistenceTests.落盘失败不影响登录成立` | 1 |
+| 8 | 登录成功自动落盘 | `BiliLoginService.CompleteLoginAsync` | `CredentialPersistenceTests.登录成功后*` | 3 |
+| 9 | 恢复登录态时读盘 | `BiliLoginService.TryRestoreSessionAsync` | `CredentialPersistenceTests.恢复登录态_从磁盘读回凭据并建立会话` | 1 |
+| 10 | 失效时清理磁盘副本 | `BiliLoginService.GetProfileAsync` | `CredentialPersistenceTests.nav判定失效时*` | 1 |
+| 11 | 落盘失败不阻断登录 | `BiliLoginService.SaveCredentialSafelyAsync` | `CredentialPersistenceTests.落盘失败不影响登录成立` | 1 |
 
 ---
 
@@ -116,12 +117,12 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 
 ### 3.4 `Current` 与磁盘的关系
 
-| 操作 | `Current` | 磁盘 |
-| --- | --- | --- |
-| `LoadAsync`（成功） | 写入读回值 | 不变（只读） |
-| `LoadAsync`（失败） | **不变** | 不变 |
-| `SaveAsync` | 先更新 | 后写入；写失败时已经是新值 |
-| `ClearAsync` | 先清空 | 后删除；删失败时已经为空 |
+| 操作 | 返回值 | `Current` | 磁盘 |
+| --- | --- | --- | --- |
+| `LoadAsync`（读到） | `true` | 写入读回值 | 不变（只读） |
+| `LoadAsync`（读不到） | `false` | **不变** | 不变 |
+| `SaveAsync` | `Task` | 先更新 | 后写入；写失败时已经是新值 |
+| `ClearAsync` | `Task` | 先清空 | 后删除；删失败时已经为空 |
 
 **写盘失败时内存与磁盘会短暂不一致**：`Current` 是新凭据，文件还是旧的。
 这是"写盘失败向上抛异常"的直接后果，调用方要么重试，要么在捕获异常后自行 `ClearAsync`。
@@ -143,20 +144,30 @@ UI                      BiliLoginService              CredentialService         
  │◀── LoginSucceeded ──────────│（失败只记日志，登录仍成立）    │                    │
 ```
 
-### 4.2 启动恢复（后续 UI 任务编排，服务只提供能力）
+### 4.2 启动恢复（ViewModel 只驱动登录服务）
+
+凭据的读盘发生在 `BiliLoginService.TryRestoreSessionAsync()` 内部：
 
 ```
-启动 ──▶ LoadAsync() ──▶ null? ──是──▶ 显示登录界面
-                          │
-                          否（Current 已就绪）
-                          ▼
-              TryRestoreSessionAsync(credentials)
-                          │
-              ┌───────────┴────────────┐
-              ▼ true                    ▼ false
-        已自动登录（nav 通过）    服务已清理内存 + 磁盘副本，
-                                 提示用户重新扫码
+ViewModel              BiliLoginService            CredentialService         磁盘
+    │                        │                            │                    │
+    │── TryRestoreSessionAsync() ──▶                     │                    │
+    │                        │── LoadAsync() ──────────▶  │── 读文件 ────────▶ │
+    │                        │◀─ false ──────────────────│（不存在/损坏/不完整）│
+    │◀── false ──────────────│                            │                    │
+    │   （显示登录界面，未发任何请求）                       │                    │
+    │                        │                            │                    │
+    │── TryRestoreSessionAsync() ──▶                     │                    │
+    │                        │── LoadAsync() ──────────▶  │── 读文件 ────────▶ │
+    │                        │◀─ true（Current 已就绪）───│                    │
+    │                        │  把 Current 的 Cookie 装进容器                    │
+    │                        │── nav 校验 ──────────────────────────────────▶ B 站
+    │◀── true（已自动登录）───│                            │                    │
 ```
+
+- 返回 `false` 有两条分支：**读不到凭据**（状态保持 `Idle`，不发生任何 HTTP 请求）与
+  **凭据已失效**（`nav` 返回 `-101`，清空内存与磁盘副本，状态置 `Expired`）。
+- ViewModel 只按返回值决定"进主界面"还是"显示登录界面"，凭据始终没有离开服务层。
 
 ### 4.3 登出与失效
 
@@ -182,7 +193,7 @@ services.AddSingleton<IBiliLoginService, BiliLoginService>();
 
 - 必须是 **Singleton**：`Current` 是进程内唯一状态，Transient / Scoped 会让每次解析都拿到空凭据。
 - 注册顺序放在登录服务之前：登录服务依赖它。
-- UI 侧构造函数注入 `ICredentialService` 即可，不需要自己 `new`。
+- 需要登录态时读`IBiliLoginService.IsLoggedIn`，需要恢复时调 `TryRestoreSessionAsync()`。
 
 ### 5.2 构造
 
@@ -198,12 +209,13 @@ services.AddSingleton<IBiliLoginService, BiliLoginService>();
 
 1. **明文存储**：`sessData` 等价于账号登录态，文件被读取即等于账号被接管。日志里只允许出现路径、`mid` 与字段是否齐备，**绝不允许出现凭据值**。
 2. **单账号单文件**：只保存"当前账号"，换账号直接覆盖；不做多账号切换。
-3. **没有 schema 版本头**：`BiliLoginCredentials` 增删字段后，旧文件里缺失的字段会反序列化成空值；`LoadAsync` 的 `IsComplete` 校验会把它拦成 `null`（视为未登录），不会把坏数据当成登录态。
+3. **没有 schema 版本头**：`BiliLoginCredentials` 增删字段后，旧文件里缺失的字段会反序列化成空值；`LoadAsync` 的 `IsComplete` 校验会把它拦成 `false`（视为未登录），不会把坏数据当成登录态。
 4. **`LoadAsync` 不删脏文件**：启动路径只读不写，损坏的文件会一直留到下一次登录覆盖或登出清理。
-5. **测试必须注入假存储或临时目录**：真实路径落在开发机自己的 `%LOCALAPPDATA%`，直接 `new CredentialService()` 会让测试污染本机数据。测试侧统一用 `Support/TempDirectory`（真实实现）或 `Support/FakeCredentialStore`（内存替身）。
-6. **登录链路会吞掉落盘异常**：登录已经成立（用户手机上确认过）时，磁盘写失败只记 `LogError`，不把登录判成失败。后果是"这次登录成功但下次启动不能自动登录"，排查时看日志里的 `登录已成立但凭据未能落盘`。
-7. **`Logout()` 的删除异常向上抛**：`Logout()` 是同步 `void`，无法把失败藏在返回里。抛出时 Cookie 与内存态已经清干净，即**本地登录确实退出了**，但磁盘副本可能仍在——UI 必须捕获并告知用户（见 §7.2）。
-8. **失效清理不抛异常**：`nav` 返回 `-101` 时的磁盘清理失败只记 warning——此时"登录态已失效"才是要传达给用户的结论。
+5. **只有本服务保管登录凭据**：运行期凭据完全由 `CredentialService` 保管，需要知道"是否已登录"时读 `IBiliLoginService.IsLoggedIn`。
+6. **测试必须注入假存储或临时目录**：真实路径落在开发机自己的 `%LOCALAPPDATA%`，直接 `new CredentialService()` 会让测试污染本机数据。测试侧统一用 `Support/TempDirectory`（真实实现）或 `Support/FakeCredentialStore`（内存替身）。
+7. **登录链路会吞掉落盘异常**：登录已经成立（用户手机上确认过）时，磁盘写失败只记 `LogError`，不把登录判成失败。后果是"这次登录成功但下次启动不能自动登录"，排查时看日志里的 `登录已成立但凭据未能落盘`。
+8. **`Logout()` 的删除异常向上抛**：`Logout()` 是同步 `void`，无法把失败藏在返回里。抛出时 Cookie 与内存态已经清干净，即**本地登录确实退出了**，但磁盘副本可能仍在——UI 必须捕获并告知用户（见 §8.2）。
+9. **失效清理不抛异常**：`nav` 返回 `-101` 时的磁盘清理失败只记 warning——此时"登录态已失效"才是要传达给用户的结论。
 
 ---
 
@@ -223,10 +235,19 @@ services.AddSingleton<IBiliLoginService, BiliLoginService>();
 | 成员 | 返回 | 抛错 | 副作用 |
 | --- | --- | --- | --- |
 | `Current` | `BiliLoginCredentials?` | — | — |
-| `LoadAsync(CancellationToken)` | 凭据；文件不存在 / JSON 损坏 / 字段缺失 / `IsComplete == false` → `null` | 不抛 | 成功时写 `Current`；只读，不创建目录 |
+| `LoadAsync(CancellationToken)` | `bool`；文件不存在 / JSON 损坏 / 字段缺失 / `IsComplete == false` → `false` | 不抛 | 成功时写 `Current`；只读，不创建目录 |
 | `SaveAsync(BiliLoginCredentials, CancellationToken)` | `Task` | `ArgumentNullException`；`StorageException` | 更新 `Current`、建目录、原子覆盖写 |
 | `ClearAsync(CancellationToken)` | `Task` | `StorageException` | 清 `Current`、删文件（不存在视为成功） |
 | `static ResolveFilePath(string baseDirectory)` | `string` | — | 纯函数，路径拼接的唯一出处 |
+
+调用顺序固定为"先 `LoadAsync`，再从 `Current` 取"：
+
+```csharp
+if (await credentials.LoadAsync(token))
+{
+    var saved = credentials.Current;   // 读盘成功时必非空
+}
+```
 
 `StorageException` 成员：`Operation`（`"写入"` / `"删除"`）、`Path`（出错文件路径）、`InnerException`（`IOException` / `UnauthorizedAccessException` / `JsonException` / `NotSupportedException`）。
 
@@ -234,30 +255,21 @@ services.AddSingleton<IBiliLoginService, BiliLoginService>();
 
 ## 8. 最小使用示例
 
-### 8.1 启动时恢复登录态
+### 8.1 启动时恢复登录态（ViewModel 侧）
 
 ```csharp
-private readonly ICredentialService _credentials;
-private readonly IBiliLoginService _login;
+private readonly IBiliLoginService _login;   // 不注入 ICredentialService
 
 public async Task RestoreOnStartupAsync(CancellationToken token)
 {
-    // LoadAsync 同时把凭据放进 Current；读不到就是 null。
-    var saved = await _credentials.LoadAsync(token);
-    if (saved is null)
-    {
-        ShowLoginPage();          // 没有可用凭据：走扫码登录
-        return;
-    }
-
-    // 凭据可能是过期的：交给登录服务校验（内部会调 nav）。
-    if (await _login.TryRestoreSessionAsync(saved, token))
+    // 读盘、装 Cookie、nav 校验全在服务内部完成。
+    if (await _login.TryRestoreSessionAsync(token))
     {
         // 已登录：昵称头像用 _login.CurrentProfile
         return;
     }
 
-    // 校验失败时服务已经把内存与磁盘副本都清掉了，直接引导重新登录。
+    // 返回 false：要么从来没有凭据，要么凭据已失效（失效时服务已清掉内存与磁盘副本）。
     ShowLoginPage();
 }
 ```

@@ -61,7 +61,7 @@
 
 ```powershell
 dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
-# 判定依据：Total: 47, Errors: 0, Failed: 0
+# 判定依据：Total: 49, Errors: 0, Failed: 0
 ```
 
 | # | 子功能 | 实现位置 | 测试 | 用例数 |
@@ -70,10 +70,10 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 | 2 | 单次状态查询 | `PollQrStatusAsync` | `QrPollingTests.状态查询_*` | 4 |
 | 3 | 轮询至终局 | `WaitForConfirmationAsync` | `QrPollingTests.终止_*` / `进度回调_*` | 6 |
 | 4 | 凭据组装 | `PublishCredentials` / `BuildCredentials` | `QrPollingTests` 成功用例 | 含在 3 内 |
-| 4.1 | 凭据落盘与清理 | `SaveCredentialSafelyAsync` / `ClearPersistedCredentialsSafely` | `CredentialPersistenceTests` | 6 |
+| 4.1 | 凭据落盘与清理 | `SaveCredentialSafelyAsync` / `ClearPersistedCredentialsSafely` | `CredentialPersistenceTests` | 7 |
 | 5 | 用户信息抓取 | `GetProfileAsync` | `UserProfileTests` | 5 |
 | 6 | 头像下载 | `GetAvatarImageAsync` | `AvatarTests` | 4 |
-| 7 | 登录态恢复 | `TryRestoreSessionAsync` | `SessionLifecycleTests.恢复登录态_*` | 3 |
+| 7 | 登录态恢复 | `TryRestoreSessionAsync` | `SessionLifecycleTests.恢复登录态_*` | 4 |
 | 8 | 登出 | `Logout` | `SessionLifecycleTests.登出_*` | 1 |
 | 9 | 资源释放 | `Dispose` | `SessionLifecycleTests.释放_*` | 1 |
 | 10 | 状态通知 | `StateChanged` / `LoginSucceeded` / `LoggedOut` | 各测试文件均有覆盖 | — |
@@ -82,7 +82,7 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 
 | 项 | 状态 |
 | --- | --- |
-| 单元/集成测试（假 HTTP 传输，覆盖全部状态机分支与异常路径） | ✅ 47/47 通过 |
+| 单元/集成测试（假 HTTP 传输，覆盖全部状态机分支与异常路径） | ✅ 49/49 通过 |
 | 真机扫码验证工具 | ✅ 已就绪：`tools/LoginQrProbe`（见 §2.4） |
 | 与真实 B 站接口的联调（真机扫码） | ✅ 已执行：工具已备好，需在能访问 `passport.bilibili.com` 的网络里跑一次 |
 
@@ -205,7 +205,7 @@ services.AddSingleton<ICredentialService, CredentialService>();
 services.AddSingleton<IBiliLoginService, BiliLoginService>();
 ```
 
-UI 侧直接构造函数注入 `IBiliLoginService`（需要凭据时再注入 `ICredentialService`）即可，不需要自己 new。
+UI 侧只注入 `IBiliLoginService`：凭据的读取、持有与落盘全在服务层内部，ViewModel 不接触凭据服务。
 
 - 必须是 **Singleton**：登录态与 `CookieContainer` 在服务实例里常驻，
   用 Transient/Scoped 会导致每次拿到新实例、Cookie 丢失。
@@ -216,6 +216,13 @@ UI 侧直接构造函数注入 `IBiliLoginService`（需要凭据时再注入 `I
 
 ```csharp
 private readonly IBiliLoginService _login;
+
+// 0) 启动时先尝试恢复上次的登录态：读盘与校验都在服务内部
+if (await _login.TryRestoreSessionAsync(token))
+{
+    // 已自动登录：昵称头像读 _login.CurrentProfile，直接进主界面
+    return;
+}
 
 // 1) 打开登录界面：取码
 var session = await _login.CreateQrSessionAsync(token);
@@ -285,7 +292,7 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
 | --- | --- |
 | 内存中持有凭据 | `ICredentialService.Current`（**唯一读取入口**，登录服务不再暴露凭据） |
 | 跨启动明文持久化 | `CredentialService`：`<LocalApplicationData>/BiliMusicDotNet/LoginCredential/credentials.json` |
-| 恢复登录态 | `TryRestoreSessionAsync(credentials, token)`（内部会调 `nav` 校验） |
+| 恢复登录态 | `TryRestoreSessionAsync(token)`：内部先 `ICredentialService.LoadAsync()` 读盘，再调 `nav` 校验 |
 | 登出 / 失效时删除持久化副本 | 登录服务调用 `ICredentialService.ClearAsync()`，UI 不需要自己删 |
 | 日志 | 只记录路径、Cookie **个数**与 `mid`，绝不输出凭据值 |
 
@@ -390,16 +397,17 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 | `WaitForConfirmationAsync(QrSession, IProgress<QrStatusResult>?, CancellationToken)` | `Task<QrLoginResult>` | `ArgumentNullException`、`OperationCanceledException` | 轮询推进状态；成功时落盘凭据、抓取资料并触发 `LoginSucceeded` |
 | `GetProfileAsync(CancellationToken)` | `Task<BiliUserProfile?>` | `HttpRequestException`、`TaskCanceledException` | 成功写 `CurrentProfile`；`nav` 返回 `-101` 时清凭据与磁盘副本并 `State → Expired` |
 | `GetAvatarImageAsync(Uri?, CancellationToken)` | `Task<byte[]?>` | **不抛**（失败一律返回 `null`） | 无 |
-| `TryRestoreSessionAsync(BiliLoginCredentials, CancellationToken)` | `Task<bool>` | `ArgumentNullException`、`StorageException` | 写 Cookie 容器，并让凭据服务持有与落盘；成功 `State → LoggedIn` 并触发 `LoginSucceeded`，失败清空登录态（含磁盘副本） |
+| `TryRestoreSessionAsync(CancellationToken)` | `Task<bool>` | `HttpRequestException`、`TaskCanceledException`（来自内部 `nav` 校验） | 内部读盘取凭据并装入 Cookie 容器；成功 `State → LoggedIn` 并触发 `LoginSucceeded`，凭据失效时清空登录态（含磁盘副本） |
 | `Logout()` | `void` | `StorageException`（删除磁盘副本失败） | 清 Cookie、清内存与磁盘凭据、`State → Idle`、触发 `LoggedOut`；**不调用 B 站登出接口** |
 | `static IsTerminal(LoginState)` | `bool` | — | 纯函数，判定 `LoggedIn` / `Expired` / `TimedOut` / `Failed` |
 
-四条容易踩的边界：
+五条容易踩的边界：
 
 - `PollQrStatusAsync` 是**单次查询**，命中成功时只组装凭据与状态，**不触发 `LoginSucceeded`** —— 该事件由 `WaitForConfirmationAsync` 在抓完资料后触发。
 - `WaitForConfirmationAsync` **不抛** `BiliApiException`：连续网络失败收敛成 `NetworkFailed` 终局，只有取消会抛。
 - `GetAvatarImageAsync` 连 `HttpRequestException` 都吞掉：头像下载失败不该拖垮已经成立的登录。
-- 登录链路上的 **落盘失败也不抛**：登录已经成立，只记 `LogError`；`Logout()` 与 `TryRestoreSessionAsync` 里的落盘/删除失败则照常抛出。
+- 登录链路上的 **落盘失败也不抛**：登录已经成立，只记 `LogError`；只有 `Logout()` 的删除失败会向上抛。
+- `TryRestoreSessionAsync` 的两种 `false` 不一样：**没有凭据**时不发任何请求、状态保持 `Idle`；**凭据失效**时 `nav` 返回 `-101`，服务清空内存与磁盘副本并置 `Expired`。
 
 ### 5.6 数据模型
 

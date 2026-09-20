@@ -9,40 +9,59 @@ namespace BiliMusicDotNet.Tests;
 /// <summary>
 /// 登录态恢复、登出与资源释放。
 /// </summary>
+/// <remarks>
+/// 恢复登录态的凭据由登录服务自己从凭据服务读盘取得，用例只需把"磁盘上有什么"预置进假存储。
+/// </remarks>
 public sealed class SessionLifecycleTests
 {
+    /// <summary>预置在"磁盘"上的凭据。</summary>
+    private static BiliLoginCredentials SampleCredentials => new(
+        "demo-sessdata-value",
+        "demo-jct-value",
+        "123456",
+        "SESSDATA=demo-sessdata-value; bili_jct=demo-jct-value; DedeUserID=123456");
+
     [Fact]
-    public async Task 恢复登录态_凭据有效()
+    public async Task 恢复登录态_读到凭据且校验通过()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
+        var store = new FakeCredentialStore { Stored = SampleCredentials };
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
 
-        var credentials = new BiliLoginCredentials(
-            "demo-sessdata-value",
-            "demo-jct-value",
-            "123456",
-            "SESSDATA=demo-sessdata-value; bili_jct=demo-jct-value; DedeUserID=123456");
-
-        var restored = await service.TryRestoreSessionAsync(credentials, TestContext.Current.CancellationToken);
+        var restored = await service.TryRestoreSessionAsync(TestContext.Current.CancellationToken);
 
         Assert.True(restored);
         Assert.True(service.IsLoggedIn);
         Assert.Equal(LoginState.LoggedIn, service.State);
         Assert.Equal(123456, service.CurrentProfile?.Mid);
+        Assert.Equal(1, store.LoadCount);
         Assert.Contains("bili_jct=demo-jct-value", handler.Requests[^1].Cookie ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task 恢复登录态_磁盘上没有凭据时不发请求()
+    {
+        var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn));
+        var store = new FakeCredentialStore();
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
+
+        var restored = await service.TryRestoreSessionAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(restored);
+        Assert.False(service.IsLoggedIn);
+        Assert.Equal(LoginState.Idle, service.State);
+        Assert.Empty(handler.Requests);
+        Assert.Equal(1, store.LoadCount);
     }
 
     [Fact]
     public async Task 恢复登录态_凭据失效()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavNotLoggedIn));
-        var store = new FakeCredentialStore();
+        var store = new FakeCredentialStore { Stored = SampleCredentials };
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
 
-        var credentials = new BiliLoginCredentials(
-            "expired", "expired", "123456", "SESSDATA=expired; bili_jct=expired; DedeUserID=123456");
-
-        var restored = await service.TryRestoreSessionAsync(credentials, TestContext.Current.CancellationToken);
+        var restored = await service.TryRestoreSessionAsync(TestContext.Current.CancellationToken);
 
         Assert.False(restored);
         Assert.False(service.IsLoggedIn, "恢复失败不应残留登录态");
@@ -53,12 +72,13 @@ public sealed class SessionLifecycleTests
     public async Task 恢复登录态_凭据不完整时直接拒绝()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn));
-        var store = new FakeCredentialStore();
+        var store = new FakeCredentialStore
+        {
+            Stored = new BiliLoginCredentials("only-sessdata", string.Empty, string.Empty, string.Empty),
+        };
         using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
 
-        var credentials = new BiliLoginCredentials("only-sessdata", string.Empty, string.Empty, string.Empty);
-
-        var restored = await service.TryRestoreSessionAsync(credentials, TestContext.Current.CancellationToken);
+        var restored = await service.TryRestoreSessionAsync(TestContext.Current.CancellationToken);
 
         Assert.False(restored);
         Assert.Empty(handler.Requests);

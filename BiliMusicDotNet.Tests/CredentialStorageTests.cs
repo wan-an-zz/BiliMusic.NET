@@ -35,14 +35,14 @@ public sealed class CredentialStorageTests
         var reader = new CredentialService(directory.Path, NullLogger<CredentialService>.Instance);
         var loaded = await reader.LoadAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(saved, loaded);
-        Assert.Equal("demo-jct-value", loaded?.BiliJct);
-        Assert.Equal("123456", loaded?.DedeUserId);
-        Assert.Contains("DedeUserID=123456", loaded?.CookieHeader ?? string.Empty, StringComparison.Ordinal);
+        Assert.True(loaded);
+        Assert.Equal(saved, reader.Current);
+        Assert.Equal("demo-jct-value", reader.Current?.BiliJct);
+        Assert.Contains("DedeUserID=123456", reader.Current?.CookieHeader ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task 保存与读回都落在Current上()
+    public async Task 读回的结果放在Current上()
     {
         using var directory = new TempDirectory();
         var service = new CredentialService(directory.Path, NullLogger<CredentialService>.Instance);
@@ -51,9 +51,12 @@ public sealed class CredentialStorageTests
         await service.SaveAsync(SampleCredentials, TestContext.Current.CancellationToken);
         Assert.Equal(SampleCredentials, service.Current);
 
+        // 新实例的 Current 为空，只有读盘成功之后才有值。
         var reader = new CredentialService(directory.Path, NullLogger<CredentialService>.Instance);
-        await reader.LoadAsync(TestContext.Current.CancellationToken);
-        Assert.Equal(SampleCredentials.SessData, reader.Current?.SessData);
+        Assert.Null(reader.Current);
+
+        Assert.True(await reader.LoadAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(SampleCredentials, reader.Current);
     }
 
     [Fact]
@@ -93,19 +96,20 @@ public sealed class CredentialStorageTests
     }
 
     [Fact]
-    public async Task 文件不存在时返回null且不创建目录()
+    public async Task 文件不存在时返回false且不创建目录()
     {
         using var directory = new TempDirectory();
         var service = new CredentialService(directory.Path, NullLogger<CredentialService>.Instance);
 
         var loaded = await service.LoadAsync(TestContext.Current.CancellationToken);
 
-        Assert.Null(loaded);
+        Assert.False(loaded);
+        Assert.Null(service.Current);
         Assert.False(Directory.Exists(Path.GetDirectoryName(CredentialService.ResolveFilePath(directory.Path))));
     }
 
     [Fact]
-    public async Task JSON损坏时返回null且不抛异常()
+    public async Task JSON损坏时返回false且不抛异常()
     {
         using var directory = new TempDirectory();
         var service = new CredentialService(directory.Path, NullLogger<CredentialService>.Instance);
@@ -113,12 +117,12 @@ public sealed class CredentialStorageTests
 
         var loaded = await service.LoadAsync(TestContext.Current.CancellationToken);
 
-        Assert.Null(loaded);
+        Assert.False(loaded);
         Assert.Null(service.Current);
     }
 
     [Fact]
-    public async Task 凭据不完整时返回null()
+    public async Task 凭据不完整时返回false()
     {
         using var directory = new TempDirectory();
         var service = new CredentialService(directory.Path, NullLogger<CredentialService>.Instance);
@@ -126,7 +130,8 @@ public sealed class CredentialStorageTests
 
         var loaded = await service.LoadAsync(TestContext.Current.CancellationToken);
 
-        Assert.Null(loaded);
+        Assert.False(loaded);
+        Assert.Null(service.Current);
     }
 
     [Fact]
@@ -143,7 +148,8 @@ public sealed class CredentialStorageTests
 
         // 再清一次不应抛异常（文件已不存在）。
         await service.ClearAsync(TestContext.Current.CancellationToken);
-        Assert.Null(await service.LoadAsync(TestContext.Current.CancellationToken));
+        Assert.False(await service.LoadAsync(TestContext.Current.CancellationToken));
+        Assert.Null(service.Current);
     }
 
     [Fact]

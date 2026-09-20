@@ -6,10 +6,11 @@ using BiliMusicDotNet.Models.Login;
 namespace BiliMusicDotNet.Tests.Support;
 
 /// <summary>
-/// 内存版凭据存储：记录调用次数，可配置落盘失败。
+/// 内存版凭据存储：记录调用次数，可预置"磁盘上有什么"，也可配置落盘失败。
 /// </summary>
 /// <remarks>
-/// 走到"登录成功 / 登出"的用例必须注入本类：真实的 <c>CredentialService</c> 会写开发机自己的用户目录。
+/// 走到"登录成功 / 登出 / 恢复登录态"的用例必须注入本类：
+/// 真实的 <c>CredentialService</c> 会读写开发机自己的用户目录。
 /// </remarks>
 public sealed class FakeCredentialStore : ICredentialService
 {
@@ -19,15 +20,31 @@ public sealed class FakeCredentialStore : ICredentialService
     /// <summary>清理次数。</summary>
     public int ClearCount { get; private set; }
 
+    /// <summary>读盘次数。</summary>
+    public int LoadCount { get; private set; }
+
     /// <summary>非空时，保存与清理都抛出它（模拟磁盘不可写）。</summary>
     public StorageException? ThrowOnWrite { get; init; }
+
+    /// <summary>模拟磁盘上已有的凭据；为 <see langword="null"/> 表示"没有存过"。</summary>
+    public BiliLoginCredentials? Stored { get; init; }
 
     /// <inheritdoc />
     public BiliLoginCredentials? Current { get; private set; }
 
     /// <inheritdoc />
-    public Task<BiliLoginCredentials?> LoadAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(Current);
+    public Task<bool> LoadAsync(CancellationToken cancellationToken = default)
+    {
+        LoadCount++;
+
+        if (Stored is null)
+        {
+            return Task.FromResult(false);
+        }
+
+        Current = Stored;
+        return Task.FromResult(true);
+    }
 
     /// <inheritdoc />
     public Task SaveAsync(BiliLoginCredentials credentials, CancellationToken cancellationToken = default)

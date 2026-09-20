@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace BiliMusicDotNet.Tests;
 
 /// <summary>
-/// 扫码登录与凭据持久化的联动：登录成功落盘、登出与失效清理。
+/// 扫码登录与凭据持久化的联动：登录成功落盘、恢复登录态读盘、登出与失效清理。
 /// </summary>
 /// <remarks>
 /// 这里用真实的 <see cref="CredentialService"/> 配临时目录，验证的是"服务之间接得对不对"；
@@ -33,10 +33,10 @@ public sealed class CredentialPersistenceTests
 
         // 换一个实例从磁盘读回，确认落的是可用的凭据而不是只有内存里有。
         var reader = NewStore(directory);
-        var loaded = await reader.LoadAsync(TestContext.Current.CancellationToken);
-        Assert.Equal("123456", loaded?.DedeUserId);
-        Assert.True(loaded?.IsComplete);
-        Assert.Equal(store.Current, loaded);
+        Assert.True(await reader.LoadAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("123456", reader.Current?.DedeUserId);
+        Assert.True(reader.Current?.IsComplete);
+        Assert.Equal(store.Current, reader.Current);
     }
 
     [Fact]
@@ -130,6 +130,35 @@ public sealed class CredentialPersistenceTests
         var saved = Assert.Single(store.Saved);
         Assert.Equal(result.Credentials, saved);
     }
+
+    [Fact]
+    public async Task 恢复登录态_从磁盘读回凭据并建立会话()
+    {
+        using var directory = new TempDirectory();
+
+        // 先用一份真实实现把凭据写进临时目录，模拟"上次登录留下的文件"。
+        var writer = NewStore(directory);
+        await writer.SaveAsync(StoredCredentials, TestContext.Current.CancellationToken);
+
+        // 全新实例的 Current 是空的：恢复只能靠服务自己读盘。
+        var store = NewStore(directory);
+        Assert.Null(store.Current);
+
+        using var service = NewLoginService(new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn)), store);
+        var restored = await service.TryRestoreSessionAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(restored);
+        Assert.Equal(StoredCredentials, store.Current);
+        Assert.True(service.IsLoggedIn);
+        Assert.Equal(LoginState.LoggedIn, service.State);
+    }
+
+    /// <summary>模拟上次登录留在磁盘上的凭据。</summary>
+    private static BiliLoginCredentials StoredCredentials => new(
+        "demo-sessdata-value",
+        "demo-jct-value",
+        "123456",
+        "SESSDATA=demo-sessdata-value; bili_jct=demo-jct-value; DedeUserID=123456");
 
     /// <summary>临时目录下的真实凭据服务。</summary>
     /// <param name="directory">临时应用数据根目录。</param>

@@ -30,7 +30,9 @@ internal static class OfflineSelfCheck
         await ScenarioWrongInnerCodeAsync();
         await ScenarioProfileFailedAsync();
         await ScenarioAvatarForbiddenAsync();
+        await ScenarioRestoreValidAsync();
         await ScenarioRestoreInvalidAsync();
+        await ScenarioRestoreMissingAsync();
 
         Console.WriteLine();
         Console.WriteLine(_failed == 0
@@ -172,17 +174,40 @@ internal static class OfflineSelfCheck
         });
     }
 
+    private static async Task ScenarioRestoreValidAsync()
+    {
+        await RunScenarioAsync("磁盘上有凭据时恢复登录态返回 true", async reporter =>
+        {
+            var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn));
+            var credentials = CreateCredentials("offline-restore-valid");
+            await credentials.SaveAsync(ValidCredentials);
+
+            // 用另一个实例恢复：Current 是空的，只能靠服务自己读盘。
+            var store = CreateCredentials("offline-restore-valid");
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
+
+            var restored = await service.TryRestoreSessionAsync();
+
+            reporter.Check(restored, "读到凭据并校验通过");
+            reporter.Check(service.IsLoggedIn, "登录态已建立");
+            reporter.Check(service.CurrentProfile?.Mid == 123456, "取到用户信息");
+            return new ProbeResult { QrContent = "(不需要)", Credentials = store.Current };
+        });
+    }
+
     private static async Task ScenarioRestoreInvalidAsync()
     {
         await RunScenarioAsync("失效凭据恢复登录态必须返回 false", async reporter =>
         {
             var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavNotLoggedIn));
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
+            var credentials = CreateCredentials("offline-restore-invalid");
+            await credentials.SaveAsync(new BiliLoginCredentials(
+                "expired", "expired", "123456", "SESSDATA=expired; bili_jct=expired; DedeUserID=123456"));
 
-            var credentials = new BiliLoginCredentials(
-                "expired", "expired", "123456", "SESSDATA=expired; bili_jct=expired; DedeUserID=123456");
+            var store = CreateCredentials("offline-restore-invalid");
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
 
-            var restored = await service.TryRestoreSessionAsync(credentials);
+            var restored = await service.TryRestoreSessionAsync();
 
             reporter.Check(!restored, "失效凭据返回 false");
             reporter.Check(!service.IsLoggedIn, "不残留登录态");
@@ -190,12 +215,38 @@ internal static class OfflineSelfCheck
         });
     }
 
+    private static async Task ScenarioRestoreMissingAsync()
+    {
+        await RunScenarioAsync("磁盘上没有凭据时恢复登录态返回 false 且不联网", async reporter =>
+        {
+            var handler = new FakeBiliHandler(_ => Responses.Json(Responses.NavLoggedIn));
+            using var service = new BiliLoginService(
+                handler, NullLogger<BiliLoginService>.Instance, CreateCredentials("offline-restore-missing"));
+
+            var restored = await service.TryRestoreSessionAsync();
+
+            reporter.Check(!restored, "没有凭据返回 false");
+            reporter.Check(handler.Requests.Count == 0, "不发出任何请求");
+            return new ProbeResult { QrContent = "(不需要)" };
+        });
+    }
+
+    /// <summary>自检用的有效凭据。</summary>
+    private static BiliLoginCredentials ValidCredentials => new(
+        "demo-sessdata-value",
+        "demo-jct-value",
+        "123456",
+        "SESSDATA=demo-sessdata-value; bili_jct=demo-jct-value; DedeUserID=123456");
+
     /// <summary>
     /// 自检专用的凭据服务：路径落在临时目录，避免把测试凭据写进真实用户目录。
     /// </summary>
+    /// <param name="scenario">场景名，用来隔离各场景的文件。</param>
     /// <returns>凭据服务。</returns>
-    private static CredentialService CreateCredentials()
-        => new(Path.Combine(Path.GetTempPath(), "BiliMusicDotNet.LoginQrProbe"), NullLogger<CredentialService>.Instance);
+    private static CredentialService CreateCredentials(string scenario = "offline")
+        => new(
+            Path.Combine(Path.GetTempPath(), "BiliMusicDotNet.LoginQrProbe", scenario),
+            NullLogger<CredentialService>.Instance);
 
     /// <summary>跑一个场景，捕获异常并统计失败数。</summary>
     private static async Task RunScenarioAsync(string name, Func<Reporter, Task<ProbeResult>> body)

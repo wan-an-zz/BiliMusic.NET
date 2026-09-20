@@ -444,12 +444,18 @@ public sealed class BiliLoginService : IBiliLoginService
     }
 
     /// <inheritdoc />
-    public async Task<bool> TryRestoreSessionAsync(BiliLoginCredentials credentials, CancellationToken cancellationToken = default)
+    public async Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(credentials);
         ThrowIfDisposed();
 
-        if (!credentials.IsComplete)
+        // 日志由凭据服务记录，这里只决定"要不要继续恢复"。
+        if (!await _credentialService.LoadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
+        // LoadAsync 成功即保证 Current 非空；判定失效时可能已被清空，因此按可空处理。
+        if (_credentialService.Current is not { IsComplete: true } credentials)
         {
             _logger.LogWarning("恢复登录态失败：凭据不完整");
             return false;
@@ -464,9 +470,6 @@ public sealed class BiliLoginService : IBiliLoginService
         SetCookie("SESSDATA", credentials.SessData);
         SetCookie("bili_jct", credentials.BiliJct);
         SetCookie("DedeUserID", credentials.DedeUserId);
-
-        // 恢复成功要以"凭据服务持有它"为前提：调用方可能是先 Load 再恢复，也可能自己组装了凭据。
-        await _credentialService.SaveAsync(credentials, cancellationToken).ConfigureAwait(false);
 
         var profile = await GetProfileAsync(cancellationToken).ConfigureAwait(false);
         if (profile is null)

@@ -121,19 +121,19 @@ public interface IBiliLoginService : IDisposable
     Task<byte[]?> GetAvatarImageAsync(Uri? imageUri, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// 校验并恢复一次既有登录态（典型场景：<see cref="ICredentialService.LoadAsync"/> 读回凭据后调用）。
+    /// 恢复既有登录态：内部先从 <see cref="ICredentialService"/> 读回凭据，再调 <c>nav</c> 校验。
     /// </summary>
-    /// <param name="credentials">
-    /// 待恢复的凭据。无论来源是磁盘读回还是调用方自行组装，都会先交给
-    /// <see cref="ICredentialService"/> 持有（并落盘）。
-    /// </param>
+    /// <remarks>
+    /// 凭据的读取与 Cookie 的设置都在本方法内部完成，调用方不接触凭据——ViewModel 只需要
+    /// 按返回值决定显示登录界面还是主界面。
+    /// </remarks>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>
-    /// 校验通过并成功取回用户信息时返回 <see langword="true"/>；
-    /// 否则返回 <see langword="false"/> 并清空登录态（含磁盘副本）。
+    /// 读到凭据且校验通过时返回 <see langword="true"/>（状态置 <see cref="LoginState.LoggedIn"/>、
+    /// 触发 <see cref="LoginSucceeded"/>）；否则返回 <see langword="false"/>
+    /// （没有凭据时不动状态，凭据已失效时清空登录态与磁盘副本）。
     /// </returns>
-    /// <exception cref="ArgumentNullException"><paramref name="credentials"/> 为 <see langword="null"/>。</exception>
-    Task<bool> TryRestoreSessionAsync(BiliLoginCredentials credentials, CancellationToken cancellationToken = default);
+    Task<bool> TryRestoreSessionAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// 登出：清除本地 Cookie、内存中的登录态与磁盘上的凭据副本，并触发 <see cref="LoggedOut"/>。

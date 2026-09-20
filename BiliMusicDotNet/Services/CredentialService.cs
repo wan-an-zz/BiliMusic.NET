@@ -95,12 +95,12 @@ public sealed class CredentialService : ICredentialService
         => Path.Combine(baseDirectory, AppFolderName, CredentialFolderName, CredentialFileName);
 
     /// <inheritdoc />
-    public async Task<BiliLoginCredentials?> LoadAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> LoadAsync(CancellationToken cancellationToken = default)
     {
         if (!File.Exists(_filePath))
         {
             _logger.LogDebug("凭据文件不存在，视为未登录：{Path}", _filePath);
-            return null;
+            return false;
         }
 
         try
@@ -111,7 +111,7 @@ public sealed class CredentialService : ICredentialService
             if (credentials is null || !credentials.IsComplete)
             {
                 _logger.LogWarning("凭据文件内容不完整，按未登录处理：{Path}", _filePath);
-                return null;
+                return false;
             }
 
             lock (this)
@@ -120,13 +120,13 @@ public sealed class CredentialService : ICredentialService
             }
 
             _logger.LogInformation("已读回登录凭据：mid={Mid}", credentials.DedeUserId);
-            return credentials;
+            return true;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             // 损坏的副本只影响"免登录"，重新扫码即可覆盖，因此不抛异常。
             _logger.LogWarning(ex, "凭据文件无法读取，按未登录处理：{Path}", _filePath);
-            return null;
+            return false;
         }
     }
 

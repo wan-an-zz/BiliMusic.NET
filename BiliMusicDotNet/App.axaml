@@ -1,12 +1,14 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="BiliMusicDotNet.App"
-             RequestedThemeVariant="Default">
+             RequestedThemeVariant="Default"
+             xmlns:sukiUi="clr-namespace:SukiUI;assembly=SukiUI">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <!-- 视图定位器由 App 启动时从容器取得并挂到 DataTemplates，见 App.axaml.cs。 -->
 
     <Application.Styles>
         <FluentTheme />
+        <sukiUi:SukiTheme ThemeColor="Blue" Locale="zh-CN"/>
     </Application.Styles>
 </Application>

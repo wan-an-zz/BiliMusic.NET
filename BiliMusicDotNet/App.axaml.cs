@@ -8,6 +8,8 @@ using BiliMusicDotNet.Logging;
 using BiliMusicDotNet.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using SukiUI;
+using SukiUI.Controls;
 
 namespace BiliMusicDotNet;
 
@@ -45,7 +47,7 @@ public partial class App : Application
             case IClassicDesktopStyleApplicationLifetime desktop:
             {
                 var mainView = viewService.CreateMainView(viewModel);
-                desktop.MainWindow = mainView as Window ?? new Window { Content = mainView };
+                desktop.MainWindow = mainView as SukiWindow ?? new SukiWindow { Content = mainView };
                 break;
             }
 

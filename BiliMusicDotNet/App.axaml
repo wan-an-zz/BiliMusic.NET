@@ -11,4 +11,13 @@
         <FluentTheme />
         <sukiUi:SukiTheme ThemeColor="Blue" Locale="zh-CN"/>
     </Application.Styles>
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- 导航图标路径数据，两端导航控件共用。 -->
+                <MergeResourceInclude Source="avares://BiliMusicDotNet/Styles/Icons.axaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
 </Application>

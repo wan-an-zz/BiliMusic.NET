@@ -1,0 +1,137 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:nav="using:BiliMusicDotNet.Models.Navigation"
+             x:Class="BiliMusicDotNet.Desktop.Controls.DesktopSideNavControl"
+             x:Name="Root">
+
+    <UserControl.Resources>
+        <!--默认导航项模板：只渲染图标。需要图标+文字等其它外观时，由外部经 ItemTemplate 覆盖 -->
+        <DataTemplate x:Key="DefaultNavItemTemplate" DataType="nav:NavItem">
+            <PathIcon Data="{Binding Icon}"
+                      Width="22" Height="22"
+                      Classes="nav-icon"
+                      Classes.selected="{Binding IsSelected}"/>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="Button.nav-btn">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="48"/>
+            <Setter Property="Height" Value="48"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.nav-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.nav-btn:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.nav-btn:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Button.nav-btn:focus /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Button.nav-btn /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <!-- 图标颜色 -->
+        <Style Selector="PathIcon.nav-icon">
+            <Setter Property="Foreground" Value="#8e8e93"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Foreground" Duration="0:0:0.2"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="PathIcon.nav-icon.selected">
+            <Setter Property="Foreground" Value="White"/>
+        </Style>
+    </UserControl.Styles>
+    
+    <!-- 两栏之间的透明空隙由 ColumnSpacing产生 -->
+    <Grid x:Name="LayoutRoot"
+          ColumnDefinitions="Auto,*"
+          ColumnSpacing="20" 
+          Background="Transparent">
+
+        <!-- 左侧：图标导航栏 -->
+        <Border Grid.Column="0"
+                x:Name="SidebarHost"
+                Background="White" CornerRadius="14"
+                BoxShadow="0 2 20 0 #0F000000"
+                Padding="10,14" Width="64"
+                Margin="5,5,0,5"
+                HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+
+            <Grid x:Name="ContentGrid">
+                <!-- 选中指示器：靠 Margin 定位，位于按钮下层 -->
+                <Border x:Name="Indicator"
+                        Width="48" Height="48"
+                        CornerRadius="14"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Top"
+                        Margin="0,0,0,0"
+                        Opacity="1">
+                    <Border.Transitions>
+                        <Transitions>
+                            <ThicknessTransition Property="Margin" Duration="0:0:0.25" Easing="CubicEaseInOut"/>
+                            <DoubleTransition Property="Opacity" Duration="0:0:0.18"/>
+                        </Transitions>
+                    </Border.Transitions>
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                            <GradientStop Color="#2e7bff" Offset="0"/>
+                            <GradientStop Color="#5b9dff" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+
+                <!-- 三段导航项：顶部 A 组 / 分隔线 / 中间 B 组 / 弹性空白 / 底部 A 组 -->
+                <Grid RowDefinitions="Auto,Auto,Auto,*,Auto"
+                      ZIndex="1" Background="Transparent">
+
+                    <ItemsControl Grid.Row="0"
+                                  x:Name="TopItems"
+                                  ItemTemplate="{Binding ItemTemplate, ElementName=Root}"/>
+
+                    <Border Grid.Row="1" Height="1" Width="36"
+                            HorizontalAlignment="Center" Margin="0,6"
+                            Background="#e8e8ed"/>
+
+                    <ItemsControl Grid.Row="2"
+                                  x:Name="MiddleItems"
+                                  ItemTemplate="{Binding ItemTemplate, ElementName=Root}"/>
+
+                    <ItemsControl Grid.Row="4"
+                                  x:Name="BottomItems"
+                                  ItemTemplate="{Binding ItemTemplate, ElementName=Root}"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- 右侧：内容面板。宿主可取 ContentArea 继续加标题栏等层（后加的子元素盖在上层）。 -->
+        <Grid Grid.Column="1"
+              x:Name="ContentAreaHost"
+              Background="Transparent">
+
+            <TransitioningContentControl x:Name="ContentHost"
+                                         Background="Transparent"
+                                         Content="{Binding SelectedItem.Content, ElementName=Root}">
+                <TransitioningContentControl.PageTransition>
+                    <CrossFade Duration="0:0:0.3"/>
+                </TransitioningContentControl.PageTransition>
+            </TransitioningContentControl>
+        </Grid>
+    </Grid>
+</UserControl>

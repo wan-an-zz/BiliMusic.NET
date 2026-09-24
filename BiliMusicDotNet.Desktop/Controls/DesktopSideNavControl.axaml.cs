@@ -31,8 +31,8 @@ public partial class DesktopSideNavControl : UserControl
     /// <summary>指示器淡出 / 淡入的等待时长。</summary>
     private const int FadePhaseDelayMs = 180;
 
-    /// <summary>指示器平移的过渡时长，与 XAML 里 ThicknessTransition 的 0.25s 对应。</summary>
-    private const int TranslateDurationMs = 250;
+    /// <summary>指示器平移的过渡时长。</summary>
+    private const int TranslateDurationMs = 220;
 
     /// <summary>指示器视觉高度，用于把图标顶边修正为指示器顶边。</summary>
     private const double IndicatorHeight = 48;
@@ -161,6 +161,7 @@ public partial class DesktopSideNavControl : UserControl
         {
             Resubscribe(change.OldValue as ObservableCollection<NavItem>, change.NewValue as ObservableCollection<NavItem>);
             Repartition();
+            CommitSelectedItem();
             ResetIndicatorToSelection();
         }
         else if (change.Property == SelectedIndexProperty)
@@ -168,7 +169,10 @@ public partial class DesktopSideNavControl : UserControl
             var oldIndex = change.OldValue is int old ? old : 0;
             var newIndex = change.NewValue is int current ? current : 0;
 
-            // 顺序：先把指示器移到目标图标，再给图标上色——所以变色推迟到动画结束后执行。
+            // 内容切换不等动画：点击瞬间即提交选中项，右侧立刻渲染新视图。
+            CommitSelectedItem();
+
+            // 只有指示器位置与图标外观走动画：先移到目标图标，到位后再给图标上色。
             if (oldIndex != newIndex && _indicatorOffsets.Count > 0)
             {
                 if (!_indicatorOffsets.ContainsKey(newIndex))
@@ -262,6 +266,20 @@ public partial class DesktopSideNavControl : UserControl
         return -1;
     }
 
+    /// <summary>
+    /// 仅提交当前选中项（决定右侧渲染哪个视图）。点击瞬间即调用，不等动画。
+    /// </summary>
+    private void CommitSelectedItem()
+    {
+        var flat = FlattenSections();
+        var selected = SelectedIndex;
+
+        SelectedItem = selected >= 0 && selected < flat.Count ? flat[selected] : null;
+    }
+
+    /// <summary>
+    /// 写所有项的选中态（图标颜色）。指示器到位后才调用 —— 这是"先移动指示器、再变色"的落点。
+    /// </summary>
     private void UpdateSelection()
     {
         var flat = FlattenSections();
@@ -269,8 +287,6 @@ public partial class DesktopSideNavControl : UserControl
 
         for (var i = 0; i < flat.Count; i++)
             flat[i].IsSelected = i == selected;
-
-        SelectedItem = selected >= 0 && selected < flat.Count ? flat[selected] : null;
     }
 
     /// <summary>
@@ -299,17 +315,51 @@ public partial class DesktopSideNavControl : UserControl
         }
     }
 
-    /// <summary>按三段顺序取出各段实际渲染出的项容器。</summary>
+    /// <summary>
+    /// 按三段顺序取出各导航项的容器。
+    /// </summary>
+    /// <remarks>
+    /// 不能直接取 <c>ItemsControl</c> 的视觉子级：那拿到的是它模板里的宿主元素，
+    /// 而不是每个导航项的容器（宿主的 Bounds 不反映项与项的间距）。
+    /// </remarks>
     private IEnumerable<Control> EnumerateContainers()
     {
         foreach (var host in new[] { TopItems, MiddleItems, BottomItems })
         {
-            foreach (var child in host.GetVisualChildren())
-            {
-                if (child is Control { DataContext: not null } container)
-                    yield return container;
-            }
+            foreach (var container in FindItemContainers(host))
+                yield return container;
         }
+    }
+
+    /// <summary>在单个 <see cref="ItemsControl"/> 内按顺序找出各导航项对应的容器。</summary>
+    private static IEnumerable<Control> FindItemContainers(ItemsControl host)
+    {
+        if (TryGetItemContainer(host, 0) is not { } probe)
+            yield break;
+
+        // 所有容器同属一个 ItemsPresenter 的父级；只遍历那一层，避免混入项内部的嵌套容器。
+        var parent = probe.GetVisualParent();
+        if (parent is null)
+        {
+            yield return probe;
+            yield break;
+        }
+
+        foreach (var child in parent.GetVisualChildren())
+        {
+            if (child is Control { DataContext: NavItem } container)
+                yield return container;
+        }
+    }
+
+    /// <summary>按索引取项容器；索引无效时返回 null。</summary>
+    private static Control? TryGetItemContainer(ItemsControl host, int index)
+    {
+        var count = host.ItemCount;
+        if (index < 0 || index >= count)
+            return null;
+
+        return host.ContainerFromIndex(index) as Control;
     }
 
     /// <summary>读取各导航项真实布局位置并换算成指示器的 Margin.Top。</summary>

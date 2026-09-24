@@ -36,6 +36,17 @@
             <Setter Property="Height" Value="48"/>
             <Setter Property="Margin" Value="0,0,0,12"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
+            
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          HorizontalContentAlignment="Center"
+                                          VerticalContentAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
         </Style>
         <Style Selector="Button.nav-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent"/>

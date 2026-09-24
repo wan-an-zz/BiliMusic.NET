@@ -12,6 +12,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Avalonia" />
+        <PackageReference Include="CommunityToolkit.Mvvm" />
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
         <!-- 二维码生成与终端渲染：用 QRCoder，不再自写编码器。 -->
         <PackageReference Include="QRCoder"/>
@@ -27,6 +29,8 @@
         <Compile Include="..\..\BiliMusicDotNet\Services\BiliLoginService.cs" Link="Linked\BiliLoginService.cs"/>
         <Compile Include="..\..\BiliMusicDotNet\Services\CredentialService.cs" Link="Linked\CredentialService.cs"/>
         <Compile Include="..\..\BiliMusicDotNet\Models\**\*.cs" Link="Linked\Models\%(RecursiveDir)%(Filename)%(Extension)"/>
+        <!-- NavItem 的 Content 是 ViewModelBase：不链接它，Models 通配带进来的 NavItem 就编不过。 -->
+        <Compile Include="..\..\BiliMusicDotNet\ViewModels\ViewModelBase.cs" Link="Linked\ViewModels\ViewModelBase.cs"/>
         <!-- 复用测试项目的假传输做离线自检，避免两处维护同一份预置响应。 -->
         <Compile Include="..\..\BiliMusicDotNet.Tests\Support\FakeBiliHandler.cs" Link="Linked\FakeBiliHandler.cs"/>
     </ItemGroup>

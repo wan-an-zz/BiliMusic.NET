@@ -1,0 +1,150 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:nav="using:BiliMusicDotNet.Models.Navigation"
+             xmlns:controls="using:BiliMusicDotNet.Android.Controls"
+             x:Class="BiliMusicDotNet.Android.Controls.BottomNavControl"
+             x:Name="Root">
+
+    <UserControl.Resources>
+        <!--
+            默认标签模板：图标 + 文字。需要别的外观时由外部经 ItemTemplate 覆盖。
+        -->
+        <DataTemplate x:Key="DefaultNavItemTemplate" DataType="nav:NavItem">
+            <Panel Background="Transparent">
+                <Button Classes="tab-btn"
+                        Focusable="False"
+                        Command="{Binding $parent[controls:BottomNavControl].SelectItemCommand}"
+                        CommandParameter="{Binding}"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center">
+                    <StackPanel Spacing="3" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <PathIcon Data="{Binding Icon}"
+                                  Width="22" Height="22"
+                                  Classes="tab-icon"
+                                  Classes.selected="{Binding IsSelected}"/>
+                        <TextBlock Text="{Binding Label}"
+                                   HorizontalAlignment="Center"
+                                   Classes="tab-label"
+                                   Classes.selected="{Binding IsSelected}"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- 底部指示器 -->
+                <Border Classes="tab-indicator"
+                        Classes.selected="{Binding IsSelected}"
+                        IsHitTestVisible="False"/>
+            </Panel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="Button.tab-btn">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0,6"/>
+        </Style>
+        <Style Selector="Button.tab-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.tab-btn:pressed">
+            <Setter Property="RenderTransform" Value="scale(0.95)"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.tab-btn:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.tab-btn:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Button.tab-btn:focus /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Button.tab-btn /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <Style Selector="PathIcon.tab-icon">
+            <Setter Property="Foreground" Value="#0c1627"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <!-- 颜色不参与过渡：选中瞬间即变蓝，放大动画随后播放。 -->
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25" Easing="CubicEaseOut"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="PathIcon.tab-icon.selected">
+            <Setter Property="Foreground" Value="#2e7bff"/>
+            <Setter Property="RenderTransform" Value="scale(1.15)"/>
+        </Style>
+
+        <Style Selector="TextBlock.tab-label">
+            <Setter Property="Foreground" Value="#0c1627"/>
+            <Setter Property="FontSize" Value="10"/>
+        </Style>
+        <Style Selector="TextBlock.tab-label.selected">
+            <Setter Property="Foreground" Value="#2e7bff"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- 底部指示器 -->
+        <Style Selector="Border.tab-indicator">
+            <Setter Property="Background" Value="#2e7bff"/>
+            <Setter Property="Height" Value="3"/>
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="CornerRadius" Value="1.5"/>
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+            <Setter Property="RenderTransform" Value="scaleX(0.2)"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.25" Easing="CubicEaseOut"/>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25" Easing="CubicEaseOut"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.tab-indicator.selected">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="RenderTransform" Value="scaleX(1)"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="*,Auto">
+
+        <!-- 页面内容区：当前选中项的视图，经 Application.DataTemplates 解析 -->
+        <TransitioningContentControl Grid.Row="0"
+                                     x:Name="ContentHost"
+                                     Background="Transparent"
+                                     Content="{Binding SelectedItem.Content, ElementName=Root}">
+            <TransitioningContentControl.PageTransition>
+                <CrossFade Duration="0:0:0.3"/>
+            </TransitioningContentControl.PageTransition>
+        </TransitioningContentControl>
+
+        <!-- 底部导航栏 -->
+        <Grid Grid.Row="1" Height="64" ClipToBounds="False" VerticalAlignment="Bottom">
+            <Border Background="{Binding NavControlBackgroundColor, ElementName=Root}"
+                    CornerRadius="20,20,0,0"
+                    BoxShadow="0 -4 12 0 #1A000000"/>
+            <ItemsControl x:Name="TabItems"
+                          ItemTemplate="{Binding ItemTemplate, ElementName=Root}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Rows="1"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </Grid>
+    </Grid>
+</UserControl>
+
+

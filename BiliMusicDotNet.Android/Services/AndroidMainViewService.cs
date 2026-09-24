@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Android.Views;
 using BiliMusicDotNet.ViewModels;
 using BiliMusicDotNet.Views;
 
@@ -11,7 +12,7 @@ namespace BiliMusicDotNet.Android.Services;
 public sealed class AndroidMainViewService : IMainViewService
 {
     /// <inheritdoc />
-    public Control CreateMainView(MainViewModel viewModel) => new MainView
+    public Control CreateMainView(MainViewModel viewModel) => new AndroidMainView()
     {
         DataContext = viewModel,
     };

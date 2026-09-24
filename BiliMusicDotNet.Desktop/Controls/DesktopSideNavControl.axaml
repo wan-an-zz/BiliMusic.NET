@@ -1,20 +1,32 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:nav="using:BiliMusicDotNet.Models.Navigation"
+             xmlns:controls="using:BiliMusicDotNet.Desktop.Controls"
              x:Class="BiliMusicDotNet.Desktop.Controls.DesktopSideNavControl"
              x:Name="Root">
 
     <UserControl.Resources>
         <!--默认导航项模板：只渲染图标。需要图标+文字等其它外观时，由外部经 ItemTemplate 覆盖 -->
+        <!--图标必须包在 Button 里：48×48 点击区、Cursor=Hand 与点击命令都由它提供。-->
         <DataTemplate x:Key="DefaultNavItemTemplate" DataType="nav:NavItem">
-            <PathIcon Data="{Binding Icon}"
-                      Width="22" Height="22"
-                      Classes="nav-icon"
-                      Classes.selected="{Binding IsSelected}"/>
+            <Button Classes="nav-btn"
+                    Command="{Binding $parent[controls:DesktopSideNavControl].SelectItemCommand}"
+                    CommandParameter="{Binding}"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center">
+                <PathIcon Data="{Binding Icon}"
+                          Width="22" Height="22"
+                          Classes="nav-icon"
+                          Classes.selected="{Binding IsSelected}"/>
+            </Button>
         </DataTemplate>
     </UserControl.Resources>
 
     <UserControl.Styles>
+        <!--
+            nav-btn 既是点击区也是图标间距的来源：项容器由它撑到 48+12 高，
+            相邻图标之间因此留出 12 的间隔，48×48 的指示器不会压到邻居。
+        -->
         <Style Selector="Button.nav-btn">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -22,6 +34,7 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Width" Value="48"/>
             <Setter Property="Height" Value="48"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
         </Style>
         <Style Selector="Button.nav-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -45,14 +58,9 @@
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
 
-        <!-- 图标颜色 -->
+        <!-- 图标颜色：不参与过渡，选中瞬间即变白 -->
         <Style Selector="PathIcon.nav-icon">
             <Setter Property="Foreground" Value="#8e8e93"/>
-            <Setter Property="Transitions">
-                <Transitions>
-                    <BrushTransition Property="Foreground" Duration="0:0:0.2"/>
-                </Transitions>
-            </Setter>
         </Style>
         <Style Selector="PathIcon.nav-icon.selected">
             <Setter Property="Foreground" Value="White"/>
@@ -98,6 +106,7 @@
                 </Border>
 
                 <!-- 三段导航项：顶部 A 组 / 分隔线 / 中间 B 组 / 弹性空白 / 底部 A 组 -->
+                <!-- 图标间距由 nav-btn 的 Margin 提供 -->
                 <Grid RowDefinitions="Auto,Auto,Auto,*,Auto"
                       ZIndex="1" Background="Transparent">
 
@@ -123,15 +132,25 @@
         <!-- 右侧：内容面板。宿主可取 ContentArea 继续加标题栏等层（后加的子元素盖在上层）。 -->
         <Grid Grid.Column="1"
               x:Name="ContentAreaHost"
+              ClipToBounds="True"
               Background="Transparent">
 
-            <TransitioningContentControl x:Name="ContentHost"
-                                         Background="Transparent"
-                                         Content="{Binding SelectedItem.Content, ElementName=Root}">
-                <TransitioningContentControl.PageTransition>
-                    <CrossFade Duration="0:0:0.3"/>
-                </TransitioningContentControl.PageTransition>
-            </TransitioningContentControl>
+            <!-- 内容卡片：白底圆角并裁掉溢出内容，使内容不越过卡片边界。 -->
+            <Border x:Name="ContentCard"
+                    CornerRadius="14"
+                    Background="White"
+                    BoxShadow="0 2 20 0 #0A000000"
+                    ClipToBounds="True">
+
+                <TransitioningContentControl x:Name="ContentHost"
+                                             Background="Transparent"
+                                             Content="{Binding SelectedItem.Content, ElementName=Root}">
+                    <TransitioningContentControl.PageTransition>
+                        <CrossFade Duration="0:0:0.3"/>
+                    </TransitioningContentControl.PageTransition>
+                </TransitioningContentControl>
+            </Border>
         </Grid>
     </Grid>
 </UserControl>
+

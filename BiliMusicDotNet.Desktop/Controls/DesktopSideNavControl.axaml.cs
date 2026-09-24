@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using BiliMusicDotNet.Models.Navigation;
 using CommunityToolkit.Mvvm.Input;
@@ -27,8 +28,11 @@ namespace BiliMusicDotNet.Desktop.Controls;
 /// </remarks>
 public partial class DesktopSideNavControl : UserControl
 {
-    /// <summary>指示器淡出 / 淡入的等待时长（略长于 180ms 的透明度过渡）。</summary>
-    private const int FadePhaseDelayMs = 210;
+    /// <summary>指示器淡出 / 淡入的等待时长。</summary>
+    private const int FadePhaseDelayMs = 180;
+
+    /// <summary>指示器平移的过渡时长，与 XAML 里 ThicknessTransition 的 0.25s 对应。</summary>
+    private const int TranslateDurationMs = 250;
 
     /// <summary>指示器视觉高度，用于把图标顶边修正为指示器顶边。</summary>
     private const double IndicatorHeight = 48;
@@ -164,7 +168,7 @@ public partial class DesktopSideNavControl : UserControl
             var oldIndex = change.OldValue is int old ? old : 0;
             var newIndex = change.NewValue is int current ? current : 0;
 
-            UpdateSelection();
+            // 顺序：先把指示器移到目标图标，再给图标上色——所以变色推迟到动画结束后执行。
             if (oldIndex != newIndex && _indicatorOffsets.Count > 0)
             {
                 if (!_indicatorOffsets.ContainsKey(newIndex))
@@ -262,19 +266,32 @@ public partial class DesktopSideNavControl : UserControl
     {
         var flat = FlattenSections();
         var selected = SelectedIndex;
-        var selectedItem = selected >= 0 && selected < flat.Count ? flat[selected] : null;
 
         for (var i = 0; i < flat.Count; i++)
             flat[i].IsSelected = i == selected;
 
-        SelectedItem = selectedItem;
+        SelectedItem = selected >= 0 && selected < flat.Count ? flat[selected] : null;
+    }
+
+    /// <summary>
+    /// 取消旧项的选中态：指示器一离开，原图标立刻变回未选中色。
+    /// 新项的选中态留到指示器到位后再由 <see cref="UpdateSelection"/> 一次性补上。
+    /// </summary>
+    private void DeselectItem(NavItem? item)
+    {
+        if (item is not null)
+            item.IsSelected = false;
     }
 
     /// <summary>集合变动后重新定位指示器：清掉旧缓存并立即落位。</summary>
     private void ResetIndicatorToSelection()
     {
+        // 布局变了，在途动画的补色会基于旧位置，先取消并立即重算。
+        _animationCts?.Cancel();
+
         _indicatorOffsets.Clear();
         CalculateIndicatorPositions();
+        UpdateSelection();
         if (_indicatorOffsets.TryGetValue(SelectedIndex, out var offset))
         {
             Indicator.Opacity = 1;
@@ -316,11 +333,35 @@ public partial class DesktopSideNavControl : UserControl
             var container = containers[i];
             var icon = FindIcon(container);
 
+            // Bounds 是相对各自父级的，必须累加到 ContentGrid 坐标系才能跨段比较。
+            var containerTop = OffsetFromContentGrid(container);
+            var iconTop = icon is not null ? containerTop + icon.Bounds.Y : containerTop;
+
             // 指示器顶边 = 图标（48 高）的顶边；没有图标时退回容器顶边。
             _indicatorOffsets[i] = icon is not null
-                ? container.Bounds.Y + icon.Bounds.Y + ((icon.Bounds.Height - IndicatorHeight) / 2.0)
-                : container.Bounds.Y;
+                ? iconTop + ((icon.Bounds.Height - IndicatorHeight) / 2.0)
+                : containerTop;
         }
+    }
+
+    /// <summary>
+    /// 把元素的 Y 从「相对其父级」累加换算成「相对 <see cref="ContentGrid"/>」。
+    /// 三段各自有 ItemsControl / StackPanel 层级，不累加会让后段的位置偏小。
+    /// </summary>
+    private double OffsetFromContentGrid(Control element)
+    {
+        var y = 0.0;
+        Visual? current = element;
+
+        while (current is not null && !ReferenceEquals(current, ContentGrid))
+        {
+            if (current is Control control)
+                y += control.Bounds.Y;
+
+            current = current.GetVisualParent();
+        }
+
+        return y;
     }
 
     /// <summary>在项容器内找到图标元素，用于对齐指示器。</summary>
@@ -357,22 +398,34 @@ public partial class DesktopSideNavControl : UserControl
     private void AnimateIndicator(int oldIndex, int newIndex)
     {
         if (!_indicatorOffsets.TryGetValue(newIndex, out var newOffset))
+        {
+            UpdateSelection();
             return;
+        }
 
         var items = FlattenSections();
         if (oldIndex < 0 || newIndex < 0 || oldIndex >= items.Count || newIndex >= items.Count)
+        {
+            UpdateSelection();
             return;
+        }
+
+        // 先取消在途动画，避免它的延迟补色覆盖本次结果。
+        _animationCts?.Cancel();
+
+        // 指示器要移走了：旧图标立刻恢复未选中色。
+        DeselectItem(oldIndex < items.Count ? items[oldIndex] : null);
 
         // 只要过渡涉及首尾两端（A 组）就换成淡出淡入，避免指示器长距离掠过中间项。
         var involvesGroupA = items[oldIndex].Group == NavGroup.A || items[newIndex].Group == NavGroup.A;
 
-        if (involvesGroupA)
-            AnimateShrinkThenExpand(newOffset);
-        else
-            AnimateSmoothTranslate(newOffset);
+        _ = involvesGroupA
+            ? AnimateShrinkThenExpandAsync(newOffset)
+            : AnimateSmoothTranslateAsync(newOffset);
     }
 
-    private async void AnimateShrinkThenExpand(double newOffset)
+    /// <summary>淡出 → 瞬移到目标 → 淡入；结束时才给图标上色。</summary>
+    private async Task AnimateShrinkThenExpandAsync(double newOffset)
     {
         var cts = new CancellationTokenSource();
         var previous = _animationCts;
@@ -393,15 +446,35 @@ public partial class DesktopSideNavControl : UserControl
         }
         catch (OperationCanceledException)
         {
-            // 快速连点时由后一次动画接管，无需处理。
+            // 快速连点时由后一次动画接管，不再补色，避免旧动画把颜色盖回去。
+            return;
         }
+
+        UpdateSelection();
     }
 
-    private void AnimateSmoothTranslate(double newOffset)
+    /// <summary>指示器整体平移到位后再给图标上色。</summary>
+    private async Task AnimateSmoothTranslateAsync(double newOffset)
     {
-        // 取消在途淡出，确保指示器可见后再平移。
-        _animationCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        var previous = _animationCts;
+        _animationCts = cts;
+        previous?.Cancel();
+        previous?.Dispose();
+        var token = cts.Token;
+
         Indicator.Opacity = 1;
         SetIndicatorPosition(newOffset);
+
+        try
+        {
+            await Task.Delay(TranslateDurationMs, token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        UpdateSelection();
     }
 }

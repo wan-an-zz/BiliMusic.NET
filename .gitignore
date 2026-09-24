@@ -11,3 +11,5 @@ AGENTS.md
 BiliMusicDotNet.Tests/.nuget-offline-feed/
 tools/**/.nuget-offline-feed/
 docs/plans/
+BiliMusicDotNet/ViewModels/Tests
+BiliMusicDotNet/Views/Tests

@@ -65,9 +65,7 @@
         
         <Grid Margin="12">
 
-            <dc:DesktopSideNavControl x:Name="SideNav"
-                                      ItemsResource="{Binding Views}"
-                                      VerticalAlignment="Stretch"/>
+            <dc:DesktopSideNavControl x:Name="SideNav" VerticalAlignment="Stretch"/>
 
             <!-- 自实现标题栏 -->
             <Panel x:Name="TitleBarChrome"

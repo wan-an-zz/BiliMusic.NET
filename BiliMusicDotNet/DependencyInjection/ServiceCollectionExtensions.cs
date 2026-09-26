@@ -22,10 +22,14 @@ public static class ServiceCollectionExtensions
 
         // ViewModels
         services.AddSingleton<MainViewModel>();
+        services.AddTransient<AboutPageViewModel>();
+        services.AddTransient<RecommendationPageViewModel>();
 
         // Views
         services.AddTransient<MainView>();
         services.AddTransient<MainWindow>();
+        services.AddTransient<AboutPageView>();
+        services.AddTransient<RecommendationPageView>();
         
         // Services
         // 凭据服务先注册：登录服务依赖它读取与落盘凭据。

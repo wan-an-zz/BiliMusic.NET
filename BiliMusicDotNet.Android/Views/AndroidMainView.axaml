@@ -8,6 +8,6 @@
              x:DataType="vm:MainViewModel"
              x:Class="BiliMusicDotNet.Android.Views.AndroidMainView">
     
-    <ac:BottomNavControl />
+    <ac:BottomNavControl ItemsResource="{Binding AllViews}"/>
     
 </UserControl>

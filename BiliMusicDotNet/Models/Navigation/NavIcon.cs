@@ -24,6 +24,12 @@ public static class NavIcon
 
     /// <summary>设置图标资源键。</summary>
     public const string Settings = "IconSettings";
+    
+    /// <summary> 关于图标资源键 </summary>
+    public const string About = "IconAbout";
+    
+    /// <summary> 推荐图标资源键 </summary>
+    public const string Recommendation = "IconRecommendation";
 
     /// <summary>
     /// 按资源键取导航图标。

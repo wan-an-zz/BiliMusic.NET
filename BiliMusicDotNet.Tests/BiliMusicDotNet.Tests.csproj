@@ -21,31 +21,22 @@
 
     <ItemGroup>
         <PackageReference Include="Avalonia" />
+        <PackageReference Include="Avalonia.Headless" />
+        <PackageReference Include="Avalonia.Headless.XUnit" />
         <PackageReference Include="CommunityToolkit.Mvvm" />
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection"/>
     </ItemGroup>
 
     <!--
-      以"链接源码"而非 ProjectReference 的方式引用被测代码。
+      直接引用被测项目：测试从此享有"被测代码重构即变红"的完整保护，
+      也让 ViewModel / 视图可用 [AvaloniaFact] 在 Headless 平台上真实跑起来。
 
-      原因：核心项目 BiliMusicDotNet 依赖 Avalonia，其构建会执行 Avalonia.BuildServices 遥测任务，
-      而该任务在当前沙箱里无法写入 %LOCALAPPDATA%（UnauthorizedAccessException 直接导致构建失败）。
-      链接源码让测试只承担被测服务的真实依赖（BCL + Microsoft.Extensions.Logging），
-      与本仓库现有的"无测试项目"状态相比前进了一步，且不会因为 UI 框架的构建副作用而变红。
-
-      待 Avalonia 构建副作用不再妨碍 CI 时，建议改为：
-          <ProjectReference Include="..\BiliMusicDotNet\BiliMusicDotNet.csproj" />
-      并删掉下面的 Compile 链接，以获得"测试随被测代码重构自动失败"的完整保护。
+      曾因 Avalonia.BuildServices 遥测任务写 %LOCALAPPDATA% 失败而改用"链接源码"，
+      现已用 <UsedAvaloniaProducts></UsedAvaloniaProducts>（项目级）+ AVALONIA_TELEMETRY_OPTOUT 关掉该任务。
     -->
     <ItemGroup>
-        <Compile Include="..\BiliMusicDotNet\Abstracts\IBiliLoginService.cs" Link="Linked\IBiliLoginService.cs"/>
-        <Compile Include="..\BiliMusicDotNet\Abstracts\ICredentialService.cs" Link="Linked\ICredentialService.cs"/>
-        <Compile Include="..\BiliMusicDotNet\Services\BiliLoginService.cs" Link="Linked\BiliLoginService.cs"/>
-        <Compile Include="..\BiliMusicDotNet\Services\CredentialService.cs" Link="Linked\CredentialService.cs"/>
-        <Compile Include="..\BiliMusicDotNet\Models\**\*.cs" Link="Linked\Models\%(RecursiveDir)%(Filename)%(Extension)"/>
-        <!-- NavItem 的 Content 是 ViewModelBase：不链接它，Models 通配带进来的 NavItem 就编不过。
-             该基类只依赖 CommunityToolkit.Mvvm，不会把 Avalonia 拖进测试项目。 -->
-        <Compile Include="..\BiliMusicDotNet\ViewModels\ViewModelBase.cs" Link="Linked\ViewModels\ViewModelBase.cs"/>
+        <ProjectReference Include="..\BiliMusicDotNet\BiliMusicDotNet.csproj" />
     </ItemGroup>
 </Project>

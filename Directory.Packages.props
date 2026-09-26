@@ -7,6 +7,8 @@
     <!-- Avalonia packages -->
     <!-- Important: keep version in sync! -->
     <PackageVersion Include="Avalonia" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Headless" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.1.2" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.2" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.2" />
     <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
@@ -24,13 +26,14 @@
     <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.2.0.2" />
     <!-- 二维码渲染（真机验证探针用；只取 AsciiQRCode 渲染器，不碰依赖 System.Drawing 的那几个）。 -->
     <PackageVersion Include="QRCoder" Version="1.8.0" />
-
     <!--
       测试栈。选型对齐本机 NuGet 缓存中已有的版本，保证离线环境也能还原。
       用 xunit.v3 而非 xunit 2.x：v3 自带 Microsoft.Testing.Platform 运行器，
       不需要 VSTest 的 testhost 子进程（本机沙箱下该子进程无法启动）。
+      版本必须钉在 3.2.2：Avalonia.Headless.XUnit 是针对它编译的，4.x 预发布改过
+      发现阶段的 TestIntrospectionHelper 签名，加载即 MissingMethodException。
     -->
-    <PackageVersion Include="xunit.v3" Version="4.0.0-pre.81" />
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <!-- 测试项目直接引用被测服务用到的日志抽象（版本与上面的 Microsoft.Extensions.Logging 保持一致）。 -->
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0-preview.6.26359.118" />
   </ItemGroup>

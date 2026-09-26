@@ -27,6 +27,8 @@ public partial class MainViewModel : ViewModelBase
         
         LoadAllViews();
         
+        
+        
         _logger.LogInformation("主视图模型已创建");
     }
 

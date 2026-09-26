@@ -6,19 +6,14 @@
 
 ```powershell
 # 唯一的权威入口：编译并运行测试程序集，进程退出码即测试结果（0 = 全绿）
-dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj -p:UsedAvaloniaProducts=""
+dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 ```
-
-`-p:UsedAvaloniaProducts=""` **必须带**：测试项目现在直接引用核心项目，而核心项目依赖 Avalonia，
-其 `Avalonia.BuildServices.targets` 会在 `$(UsedAvaloniaProducts) != ''` 时执行遥测任务，
-本机沙箱下该任务写 `%LOCALAPPDATA%\AvaloniaUI\...` 被拒，会以 `MSB4018` 让构建失败。
-（`AVALONIA_TELEMETRY_OPTOUT=1` **没用**：那个变量只被遥测采集器读，拦不住 MSBuild 任务。）
 
 输出末尾的汇总行是判定依据：
 
 ```
 === TEST EXECUTION SUMMARY ===
-   BiliMusicDotNet.Tests  Total: 75, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
+   BiliMusicDotNet.Tests  Total: 83, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
 ```
 
 **提交前必须全绿（`Failed: 0` 且 `Errors: 0`）**，这是本仓库的提交闸门。
@@ -59,6 +54,8 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj -p:Use
 | `CredentialPersistenceTests.cs` | 登录/登出/失效与持久化的联动、恢复登录态读盘、落盘失败不阻断登录 |
 | `HeadlessHostTests.cs` | Headless 宿主自检：`[AvaloniaFact]` 可用、`avares://` 资产与 `IconAbout` 资源真的能取到 |
 | `CountdownFormatTests.cs` | 倒计时文本：`mm:ss` 格式化、不足一秒向上进位、归零即失效 |
+| `QrLoginViewModelTests.cs` | 扫码弹窗：加载态判定（不能用 `WaitingForScan` 判）、四类状态文案、倒计时起停与归零、取消后不再响应 |
+| `AboutPageViewModelTests.cs` | 「关于」页：默认值、登录成功换头像换名、资料/头像缺失回退、登出恢复默认、删盘失败仍按已登出渲染、取码失败收弹窗 |
 
 ### Headless（UI）测试怎么做的
 

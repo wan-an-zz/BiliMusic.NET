@@ -4,6 +4,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:BiliMusicDotNet.ViewModels;assembly=BiliMusicDotNet"
         xmlns:dc="clr-namespace:BiliMusicDotNet.Desktop.Controls"
+        xmlns:sukiUi="clr-namespace:SukiUI;assembly=SukiUI"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="BiliMusicDotNet.Desktop.Views.DesktopMainWindow"
         x:DataType="vm:MainViewModel"
@@ -15,6 +16,10 @@
         ExtendClientAreaTitleBarHeightHint="0"
         TransparencyLevelHint="Blur"
         Background="Transparent">
+    
+    <Window.Styles>
+        <sukiUi:SukiTheme ThemeColor="Blue" Locale="zh-CN"/> 
+    </Window.Styles>
     
     <Border x:Name="GlassBorder"
             CornerRadius="16"

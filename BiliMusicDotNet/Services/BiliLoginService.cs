@@ -481,7 +481,7 @@ public sealed class BiliLoginService : IBiliLoginService
 
         _logger.LogInformation("已恢复登录态：mid={Mid}", profile.Mid);
         SetState(LoginState.LoggedIn, "已自动登录", profile);
-        RaiseLoginSucceeded(credentials, profile);
+        RaiseLoginSucceeded(profile);
         return true;
     }
 
@@ -677,7 +677,7 @@ public sealed class BiliLoginService : IBiliLoginService
 
         _logger.LogInformation("扫码登录成功：mid={Mid}", profile?.Mid ?? 0);
         SetState(LoginState.LoggedIn, "登录成功", profile);
-        RaiseLoginSucceeded(credentials, profile);
+        RaiseLoginSucceeded(profile);
 
         return new QrLoginResult(QrLoginOutcome.Succeeded, credentials, profile, "登录成功");
     }
@@ -1154,14 +1154,13 @@ public sealed class BiliLoginService : IBiliLoginService
     /// <summary>
     /// 触发登录成功事件。
     /// </summary>
-    /// <param name="credentials">本次登录取得的凭据。</param>
     /// <param name="profile">用户信息。</param>
-    private void RaiseLoginSucceeded(BiliLoginCredentials credentials, BiliUserProfile? profile)
+    private void RaiseLoginSucceeded(BiliUserProfile? profile)
     {
         var handler = LoginSucceeded;
         if (handler is not null)
         {
-            handler(this, new LoginSucceededEventArgs(credentials, profile));
+            handler(this, new LoginSucceededEventArgs(profile));
         }
     }
 

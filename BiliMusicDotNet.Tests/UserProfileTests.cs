@@ -112,7 +112,8 @@ public sealed class UserProfileTests
         Assert.Equal(LoginState.LoggedIn, service.State);
 
         var payload = Assert.IsType<LoginSucceededEventArgs>(succeeded);
-        Assert.Same(result.Credentials, payload.Credentials);
+        // 事件只带用户信息：凭据由 ICredentialService 持有，不再经事件外流。
         Assert.NotNull(payload.Profile);
+        Assert.Equal(result.Profile, payload.Profile);
     }
 }

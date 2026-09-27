@@ -70,7 +70,7 @@
                                Margin="0, 7"
                                FontWeight="SemiBold" />
 
-                    <Border Height="2" Margin="10,8" Background="#22000000" HorizontalAlignment="Stretch"/>
+                    <Border x:Name="Divider" Height="2" Margin="10,8" Background="#22000000" HorizontalAlignment="Stretch"/>
                 </StackPanel>
 
                 <!-- 其它信息区由后续任务实现，此处留空。 -->

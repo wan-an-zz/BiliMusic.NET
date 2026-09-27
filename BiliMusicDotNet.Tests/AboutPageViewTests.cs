@@ -136,11 +136,14 @@ public class AboutPageViewTests
         var view = new AboutPageView { DataContext = model };
         var window = await MountAsync(view);
 
-        var divider = view.GetVisualDescendants().OfType<Border>()
-            .First(b => b.Height == 1 && b.Background is not null);
+        // 按名字取，别按高度猜：分割线的粗细是随时会调的外观参数。
+        var divider = view.FindControl<Border>("Divider");
+        Assert.NotNull(divider);
 
-        // 比内容区略短：两端只留分割线自己的 10px 边距。
-        Assert.True(divider.Bounds.Width > window.Width - 60, $"分割线宽度 {divider.Bounds.Width}，窗口宽度 {window.Width}");
+        // 比内容区略短：两端只留分割线自己的边距。
+        Assert.True(
+            divider!.Bounds.Width > window.Width - 60,
+            $"分割线宽度 {divider.Bounds.Width}，窗口宽度 {window.Width}");
     }
 
     [AvaloniaFact]

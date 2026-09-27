@@ -3,6 +3,7 @@ using BiliMusicDotNet.Logging;
 using BiliMusicDotNet.Services;
 using BiliMusicDotNet.ViewModels;
 using BiliMusicDotNet.Views;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BiliMusicDotNet.DependencyInjection;
@@ -19,6 +20,9 @@ public static class ServiceCollectionExtensions
         services.AddAppLogging();
         
         services.AddSingleton<ViewLocator>();
+
+        // Messenger
+        services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
 
         // ViewModels
         services.AddSingleton<MainViewModel>();
@@ -40,4 +44,3 @@ public static class ServiceCollectionExtensions
         return services;
     }
 }
-

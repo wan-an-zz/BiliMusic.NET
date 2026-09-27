@@ -67,6 +67,16 @@ public sealed partial class AboutPageViewModel : ViewModelBase
     [ObservableProperty]
     private string _userName = AppName;
 
+    /// <summary>指针悬停在图标上时显示的动作提示文案。</summary>
+    [ObservableProperty]
+    private string _avatarActionText = LoginActionText;
+
+    /// <summary>未登录时悬停提示的操作。</summary>
+    public const string LoginActionText = "立即登录";
+
+    /// <summary>已登录时悬停提示的操作。</summary>
+    public const string LogoutActionText = "退出登录";
+
     /// <summary>头像被点击：未登录去登录，已登录弹二次确认后登出。</summary>
     public void OnAvatarPointerPressed()
     {
@@ -136,8 +146,8 @@ public sealed partial class AboutPageViewModel : ViewModelBase
     {
         if (!DialogManager.CreateDialog()
                 .WithTitle("退出登录")
-                .WithContent("确定要退出当前账号吗？")
-                .WithActionButton("取消", _ => DialogManager.DismissDialog())
+                .WithContent($"确定要退出「{UserName}」吗？")
+                .WithActionButton("取消", _ => DialogManager.DismissDialog(), false, "Flat")
                 .WithActionButton(
                     "退出登录",
                     _ =>
@@ -146,7 +156,7 @@ public sealed partial class AboutPageViewModel : ViewModelBase
                         Logout();
                     },
                     dismissOnClick: false,
-                    classes: ["Flat", "Accent"])
+                    classes: ["Accent"])
                 .TryShow())
         {
             _logger.LogWarning("已有弹窗在显示，本次登出未开始");
@@ -221,6 +231,7 @@ public sealed partial class AboutPageViewModel : ViewModelBase
     private async Task ApplyProfileAsync(BiliUserProfile? profile)
     {
         UserName = string.IsNullOrWhiteSpace(profile?.Nickname) ? AppName : profile!.Nickname;
+        AvatarActionText = LogoutActionText;
 
         if (profile?.AvatarUri is not { } avatarUri)
         {
@@ -245,6 +256,7 @@ public sealed partial class AboutPageViewModel : ViewModelBase
     private void RestoreDefaults()
     {
         UserName = AppName;
+        AvatarActionText = LoginActionText;
         HeadPhoto = LoadPlaceholder();
     }
 

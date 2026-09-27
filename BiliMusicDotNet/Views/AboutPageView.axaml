@@ -3,8 +3,80 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:BiliMusicDotNet.ViewModels"
+             xmlns:suki="clr-namespace:SukiUI.Controls;assembly=SukiUI"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:DataType="vm:AboutPageViewModel"
              x:Class="BiliMusicDotNet.Views.AboutPageView">
-    
+
+    <UserControl.Styles>
+        <!-- 悬停时图标变淡。 -->
+        <Style Selector="Image.avatar-image">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.15"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Panel#AvatarHost:pointerover Image.avatar-image">
+            <Setter Property="Opacity" Value="0.35"/>
+        </Style>
+
+        <!--
+            遮罩里带着提示文字，所以必须整体真正隐藏（IsVisible）。
+            只把背景改成透明是不行的：文字照旧绘制在图标上，移开指针后会一直留着。
+        -->
+        <Style Selector="Border.avatar-overlay">
+            <Setter Property="IsVisible" Value="False"/>
+        </Style>
+        <Style Selector="Panel#AvatarHost:pointerover Border.avatar-overlay">
+            <Setter Property="IsVisible" Value="True"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <ScrollViewer>
+            <Grid Margin="16,40" RowDefinitions="*, Auto">
+                <StackPanel Grid.Row="0" HorizontalAlignment="Stretch" Spacing="20">
+                    <!-- 圆形图标：未登录是应用图标，已登录是头像；悬停变灰并提示可执行的动作。 -->
+                    <Panel x:Name="AvatarHost"
+                           Width="150" Height="150"
+                           HorizontalAlignment="Center"
+                           Cursor="Hand"
+                           PointerPressed="OnAvatarPointerPressed">
+                        <Border CornerRadius="75" ClipToBounds="True" Background="#0F000000">
+                            <Image Classes="avatar-image"
+                                   Source="{Binding HeadPhoto}"
+                                   Stretch="UniformToFill"
+                                   RenderOptions.BitmapInterpolationMode="HighQuality" />
+                        </Border>
+
+                        <!-- 只在悬停时可见；具体可见性由上面的样式按 :pointerover 控制。 -->
+                        <Border Classes="avatar-overlay"
+                                CornerRadius="75"
+                                Background="#949292"
+                                Opacity="0.5">
+                            <TextBlock Text="{Binding AvatarActionText}"
+                                       Foreground="White"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                        </Border>
+                    </Panel>
+
+                    <TextBlock Text="{Binding UserName}"
+                               HorizontalAlignment="Center"
+                               FontSize="24"
+                               Margin="0, 7"
+                               FontWeight="SemiBold" />
+
+                    <Border Height="2" Margin="10,8" Background="#22000000" HorizontalAlignment="Stretch"/>
+                </StackPanel>
+
+                <!-- 其它信息区由后续任务实现，此处留空。 -->
+            </Grid>
+        </ScrollViewer>
+
+        <suki:SukiDialogHost Manager="{Binding DialogManager}" ZIndex="1" />
+    </Panel>
 </UserControl>

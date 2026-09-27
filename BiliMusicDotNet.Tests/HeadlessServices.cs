@@ -51,6 +51,7 @@ internal static class HeadlessServices
         services.AddTransient<RecommendationPageViewModel>();
         services.AddTransient<BiliMusicDotNet.Views.AboutPageView>();
         services.AddTransient<BiliMusicDotNet.Views.RecommendationPageView>();
+        services.AddTransient<BiliMusicDotNet.Views.QrLoginView>();
 
         return services.BuildServiceProvider();
     }

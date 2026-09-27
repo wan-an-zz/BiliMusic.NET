@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:BiliMusicDotNet.ViewModels"
+             xmlns:suki="clr-namespace:SukiUI.Controls;assembly=SukiUI"
+             mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="420"
+             x:Class="BiliMusicDotNet.Views.QrLoginView"
+             x:DataType="vm:QrLoginViewModel">
+
+    <!-- 取码期间 BusyArea 压暗内容并盖一层加载动画；拿到码后 IsBusy 置 false。 -->
+    <suki:BusyArea IsBusy="{Binding IsBusy}">
+        <StackPanel HorizontalAlignment="Center" Spacing="14" Margin="0,4">
+
+            <!-- 静区由渲染器画进像素里，这里不再留外边距；位图放大用最近邻，避免格线发虚。 -->
+            <Image Source="{Binding QrImage}"
+                   Width="220" Height="220"
+                   Stretch="Uniform"
+                   RenderOptions.BitmapInterpolationMode="None"
+                   HorizontalAlignment="Center" />
+
+            <TextBlock Text="{Binding RemainingText, StringFormat='二维码剩余 {0}'}"
+                       IsVisible="{Binding ShowCountdown}"
+                       HorizontalAlignment="Center"
+                       FontSize="15"
+                       FontWeight="SemiBold" />
+
+            <TextBlock Text="{Binding StatusText}"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       MaxWidth="280" />
+
+            <Button x:Name="RefetchButton"
+                    Classes="Flat Accent"
+                    Content="重新取码"
+                    IsVisible="{Binding ShowRefetch}"
+                    Command="{Binding RefetchCommand}"
+                    HorizontalAlignment="Center" />
+        </StackPanel>
+    </suki:BusyArea>
+</UserControl>

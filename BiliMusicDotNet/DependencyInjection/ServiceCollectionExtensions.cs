@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<MainWindow>();
         services.AddTransient<AboutPageView>();
         services.AddTransient<RecommendationPageView>();
+        services.AddTransient<QrLoginView>();
         
         // Services
         // 凭据服务先注册：登录服务依赖它读取与落盘凭据。
@@ -39,3 +40,4 @@ public static class ServiceCollectionExtensions
         return services;
     }
 }
+

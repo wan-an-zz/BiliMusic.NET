@@ -1,8 +1,7 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using BiliMusicDotNet.ViewModels;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace BiliMusicDotNet.Views;
 
@@ -11,7 +10,9 @@ public partial class AboutPageView : UserControl
     public AboutPageView()
     {
         InitializeComponent();
-
-        DataContext = App.Services!.GetRequiredService<AboutPageViewModel>();
     }
+
+    /// <summary>点击头像：未登录去登录，已登录走二次确认登出。</summary>
+    private void OnAvatarPointerPressed(object? sender, PointerPressedEventArgs e)
+        => (DataContext as AboutPageViewModel)?.OnAvatarPointerPressed();
 }

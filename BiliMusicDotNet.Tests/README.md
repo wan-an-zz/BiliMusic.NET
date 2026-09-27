@@ -13,7 +13,7 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 
 ```
 === TEST EXECUTION SUMMARY ===
-   BiliMusicDotNet.Tests  Total: 83, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
+   BiliMusicDotNet.Tests  Total: 104, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
 ```
 
 **提交前必须全绿（`Failed: 0` 且 `Errors: 0`）**，这是本仓库的提交闸门。

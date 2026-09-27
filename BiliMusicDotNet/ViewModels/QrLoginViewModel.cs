@@ -153,6 +153,7 @@ public sealed partial class QrLoginViewModel : ViewModelBase
 
             case LoginState.LoggedIn:
                 StopCountdown();
+                QrImage = null;
                 StatusText = "登录成功";
                 break;
 

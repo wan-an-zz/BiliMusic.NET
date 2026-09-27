@@ -1,6 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="BiliMusicDotNet.App"
+             xmlns:sukiUi="clr-namespace:SukiUI;assembly=SukiUI"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
@@ -8,11 +9,7 @@
 
     <Application.Styles>
         <FluentTheme />
-        <!--
-            此处原先还有 SukiUI 的 SukiTheme。它会给全应用的 Button 装上带按压物理动画的控件主题，
-            而该动画在按钮脱离可视树后仍会订阅渲染帧，抛 InvalidOperationException 直接崩进程。
-            桌面窗口已改为普通 Window，不再使用任何 SukiUI 控件，故移除。
-        -->
+        <sukiUi:SukiTheme ThemeColor="Blue" Locale="zh-CN"/>
     </Application.Styles>
 
     <Application.Resources>

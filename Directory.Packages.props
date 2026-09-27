@@ -22,7 +22,7 @@
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="11.0.0-preview.6.26359.118" />
     <PackageVersion Include="NLog" Version="6.2.0" />
     <PackageVersion Include="NLog.Extensions.Logging" Version="6.2.0" />
-    <PackageVersion Include="SukiUI" Version="7.0.2-nightly20260910.453" />
+    <PackageVersion Include="SukiUI" Version="7.0.2-nightly20260925.468" />
     <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.2.0.2" />
     <!-- 二维码渲染（真机验证探针用；只取 AsciiQRCode 渲染器，不碰依赖 System.Drawing 的那几个）。 -->
     <PackageVersion Include="QRCoder" Version="1.8.0" />

@@ -128,7 +128,8 @@ public sealed class CredentialPersistenceTests
 
         Assert.Equal(QrLoginOutcome.Succeeded, result.Outcome);
         var saved = Assert.Single(store.Saved);
-        Assert.Equal(result.Credentials, saved);
+        Assert.True(saved.IsComplete);
+        Assert.Equal("123456", saved.DedeUserId);
     }
 
     [Fact]

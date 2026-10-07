@@ -20,7 +20,7 @@ public class QrLoginViewModelTests
         => new(dismiss ?? (() => { }));
 
     private static QrStatusResult Status(LoginState state, string message = "0")
-        => new(state, 0, message, null);
+        => new(state, 0, message);
 
     [AvaloniaFact]
     public void 初始处于取码中()

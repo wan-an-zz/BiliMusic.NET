@@ -178,7 +178,7 @@ public sealed partial class QrLoginViewModel : ViewModelBase
         switch (outcome)
         {
             case QrLoginOutcome.Succeeded:
-                Apply(new QrStatusResult(LoginState.LoggedIn, 0, "登录成功", null));
+                Apply(new QrStatusResult(LoginState.LoggedIn, 0, "登录成功"));
                 break;
 
             case QrLoginOutcome.Expired:
@@ -187,7 +187,7 @@ public sealed partial class QrLoginViewModel : ViewModelBase
                 break;
 
             default:
-                Apply(new QrStatusResult(LoginState.Failed, -1, "连接服务器时出现问题", null));
+                Apply(new QrStatusResult(LoginState.Failed, -1, "连接服务器时出现问题"));
                 break;
         }
     }

@@ -22,7 +22,8 @@ public sealed class QrPollingTests
         var handler = new FakeBiliHandler(url => url.Contains("generate")
             ? Responses.Json(Responses.GenerateBody)
             : Responses.Json(Responses.PollBody(Responses.StatusNotScanned)));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
+        var store = new FakeCredentialStore();
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var result = await service.PollQrStatusAsync(session, TestContext.Current.CancellationToken);
@@ -30,7 +31,7 @@ public sealed class QrPollingTests
         // 外层 code 是 0（接口调用成功），若按外层判断会被误判成"登录成功"。
         Assert.Equal(LoginState.WaitingForScan, result.State);
         Assert.Equal(Responses.StatusNotScanned, result.RawStatus);
-        Assert.Null(result.Credentials);
+        Assert.Null(store.Current);
         Assert.Contains("扫描", result.Message, StringComparison.Ordinal);
     }
 

@@ -86,8 +86,7 @@ public interface IBiliLoginService : IDisposable
     /// <param name="progress">可选的进度回调，每次状态变化时报告一次（UI 可据此提示"已扫码，请在手机上确认"）。</param>
     /// <param name="cancellationToken">取消令牌；用户关闭登录界面时必须取消。</param>
     /// <returns>
-    /// 轮询终局。仅当 <see cref="QrLoginResult.Outcome"/> 为 <see cref="QrLoginOutcome.Succeeded"/> 时
-    /// <see cref="QrLoginResult.Credentials"/> 才非空（凭据同时已写入 <see cref="ICredentialService.Current"/>）。
+    /// 轮询终局。登录成功时凭据已同时写入 <see cref="ICredentialService.Current"/>，不随结果返回。
     /// 返回 <see cref="QrLoginOutcome.TimedOut"/> 或 <see cref="QrLoginOutcome.NetworkFailed"/> 时，
     /// 会话可能仍然有效，UI 可提示用户后重新调用本方法续等（不必重新取码）。
     /// </returns>

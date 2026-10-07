@@ -54,7 +54,8 @@ internal static class ProbeRunner
             Console.WriteLine("   代理：使用系统代理设置（Windows 上会自动读取 Internet 选项）");
         }
 
-        using var service = new BiliLoginService(handler, logger, CreateCredentials());
+        var store = CreateCredentials();
+        using var service = new BiliLoginService(handler, logger, store);
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(options.Timeout);
         var token = timeoutSource.Token;
@@ -147,7 +148,8 @@ internal static class ProbeRunner
             return 1;
         }
 
-        var credentials = login.Credentials;
+        // 登录服务不再把凭据随结果返回，改从它落地的凭据服务里读。
+        var credentials = store.Current;
         var complete = credentials?.IsComplete == true;
         checks.Add((complete, "凭据三件套（SESSDATA + bili_jct + DedeUserID）齐备"));
         Console.WriteLine($"   {(complete ? "PASS" : "FAIL")}  凭据齐备");

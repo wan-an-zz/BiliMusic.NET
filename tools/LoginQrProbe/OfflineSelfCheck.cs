@@ -47,7 +47,8 @@ internal static class OfflineSelfCheck
         await RunScenarioAsync("完整成功链路（取码 → 扫码 → 凭据 → 昵称头像 → 头像字节）", async reporter =>
         {
             var handler = FakeBiliHandler.Succeeding();
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
+            var store = CreateCredentials();
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
 
             var session = await service.CreateQrSessionAsync();
             reporter.Check(ProbeAssertions.IsValidQrContent(session.Content), "二维码内容是合法 https URL");
@@ -57,7 +58,7 @@ internal static class OfflineSelfCheck
 
             var result = await service.WaitForConfirmationAsync(session);
             reporter.Check(result.Outcome == QrLoginOutcome.Succeeded, "终局为 Succeeded");
-            reporter.Check(result.Credentials?.IsComplete == true, "凭据三件套齐备");
+            reporter.Check(store.Current?.IsComplete == true, "凭据三件套齐备");
             reporter.Check(result.Profile?.Nickname == "测试用户", "取到昵称");
             reporter.Check(result.Profile?.AvatarUri is not null, "取到头像地址");
 
@@ -69,18 +70,19 @@ internal static class OfflineSelfCheck
                 QrContent = session.Content,
                 QrExpiresAt = session.ExpiresAt,
                 PollCount = handler.PollCount,
-                Credentials = result.Credentials,
+                Credentials = store.Current,
                 Profile = result.Profile,
                 AvatarBytes = bytes?.Length ?? 0,
             };
 
             var markdown = report.ToMarkdown();
+            var credentials = store.Current;
             reporter.Check(markdown.Contains("已脱敏", StringComparison.Ordinal), "报告声明了凭据已脱敏");
             reporter.Check(
-                result.Credentials is null || !markdown.Contains(result.Credentials.SessData, StringComparison.Ordinal),
+                credentials is null || !markdown.Contains(credentials.SessData, StringComparison.Ordinal),
                 "报告正文不含 SESSDATA 原值");
             reporter.Check(
-                result.Credentials is null || !markdown.Contains(result.Credentials.BiliJct, StringComparison.Ordinal),
+                credentials is null || !markdown.Contains(credentials.BiliJct, StringComparison.Ordinal),
                 "报告正文不含 bili_jct 原值");
 
             return report;
@@ -128,14 +130,15 @@ internal static class OfflineSelfCheck
             var handler = new FakeBiliHandler(url => url.Contains("generate")
                 ? Responses.Json(Responses.GenerateBody)
                 : Responses.Json(Responses.PollBody(Responses.StatusNotScanned)));
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
+            var store = CreateCredentials();
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
 
             var session = await service.CreateQrSessionAsync();
             var status = await service.PollQrStatusAsync(session);
 
             reporter.Check(status.State == LoginState.WaitingForScan, "未扫码状态映射正确");
             reporter.Check(status.RawStatus == Responses.StatusNotScanned, "原始状态码为 86101");
-            reporter.Check(status.Credentials is null, "未扫码时没有凭据");
+            reporter.Check(store.Current is null, "未扫码时没有凭据");
             return new ProbeResult { QrContent = session.Content, PollCount = handler.PollCount };
         });
     }
@@ -149,14 +152,15 @@ internal static class OfflineSelfCheck
                 : url.Contains("/qrcode/poll")
                     ? Responses.Redirect(Responses.SetCookies)
                     : throw new HttpRequestException("模拟资料接口不可用"));
-            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, CreateCredentials());
+            var store = CreateCredentials();
+            using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
 
             var session = await service.CreateQrSessionAsync();
             var result = await service.WaitForConfirmationAsync(session);
 
             reporter.Check(result.Outcome == QrLoginOutcome.Succeeded, "登录仍然成功");
             reporter.Check(result.Profile is null, "资料为空但不谎报失败");
-            return new ProbeResult { QrContent = session.Content, Credentials = result.Credentials };
+            return new ProbeResult { QrContent = session.Content, Credentials = store.Current };
         });
     }
 

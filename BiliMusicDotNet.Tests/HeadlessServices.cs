@@ -89,7 +89,7 @@ internal static class HeadlessServices
 
         /// <summary>轮询终局。</summary>
         public QrLoginResult QrResult { get; set; } =
-            new(QrLoginOutcome.Expired, null, null, "二维码已失效");
+            new(QrLoginOutcome.Expired, null, "二维码已失效");
 
         /// <summary>头像字节；为 <see langword="null"/> 表示取不到。</summary>
         public byte[]? AvatarBytes { get; set; }

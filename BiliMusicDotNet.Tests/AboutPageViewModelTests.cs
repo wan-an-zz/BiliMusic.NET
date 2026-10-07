@@ -154,7 +154,7 @@ public class AboutPageViewModelTests
         var login = new HeadlessServices.StubLoginService
         {
             QrSession = Session(),
-            QrResult = new QrLoginResult(QrLoginOutcome.Expired, null, null, "二维码已失效"),
+            QrResult = new QrLoginResult(QrLoginOutcome.Expired, null, "二维码已失效"),
         };
         var vm = NewViewModel(login);
         var shown = 0;

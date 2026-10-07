@@ -316,7 +316,7 @@ public sealed class BiliLoginService : IBiliLoginService
                         break;
 
                     case LoginState.LoggedIn:
-                        terminal = await CompleteLoginAsync(session, status, cancellationToken).ConfigureAwait(false);
+                        terminal = await CompleteLoginAsync(session, cancellationToken).ConfigureAwait(false);
                         break;
 
                     default:
@@ -561,10 +561,9 @@ public sealed class BiliLoginService : IBiliLoginService
         if (IsRedirect(response.StatusCode))
         {
             _logger.LogDebug("轮询命中重定向（HTTP {Status}），按登录成功处理", (int)response.StatusCode);
-            var credentials = PublishCredentials(setCookies) ?? CaptureCredentialsFromCookieContainer();
+            PublishCredentials(setCookies);
 
-            result = new QrStatusResult(
-                LoginState.LoggedIn, RawSuccess, ResolveMessage(RawSuccess, null), credentials);
+            result = new QrStatusResult(LoginState.LoggedIn, RawSuccess, ResolveMessage(RawSuccess, null));
         }
         else
         {
@@ -586,14 +585,13 @@ public sealed class BiliLoginService : IBiliLoginService
             var message = ResolveMessage(rawStatus, hasPayload ? TryGetString(payload, "message") : outer.Message);
             var state = MapState(rawStatus);
 
-            BiliLoginCredentials? credentials = null;
             if (state == LoginState.LoggedIn)
             {
                 // 200 + code 0 的路径：Cookie 同样在响应头里。
-                credentials = PublishCredentials(setCookies);
+                PublishCredentials(setCookies);
             }
 
-            result = new QrStatusResult(state, rawStatus, message, credentials);
+            result = new QrStatusResult(state, rawStatus, message);
         }
 
         if (publishState)
@@ -622,28 +620,24 @@ public sealed class BiliLoginService : IBiliLoginService
     /// 登录成功后的收尾：确保凭据已落地、抓取用户信息、触发登录事件。
     /// </summary>
     /// <param name="session">扫码会话。</param>
-    /// <param name="status">判定为登录成功的那次状态查询结果。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>终局结果。</returns>
     private async Task<QrLoginResult> CompleteLoginAsync(
         QrSession session,
-        QrStatusResult status,
         CancellationToken cancellationToken)
     {
         // 同一个 key 只完成一次：重入的轮询不该重复触发登录事件。
         if (_processedKeys.Contains(session.Key))
         {
-            var existing = _credentialService.Current;
-            return existing is null
-                ? new QrLoginResult(QrLoginOutcome.Expired, null, null, "该二维码已使用，请重新获取")
-                : new QrLoginResult(QrLoginOutcome.Succeeded, existing, CurrentProfile, "登录成功");
+            return _credentialService.Current is null
+                ? new QrLoginResult(QrLoginOutcome.Expired, null, "该二维码已使用，请重新获取")
+                : new QrLoginResult(QrLoginOutcome.Succeeded, CurrentProfile, "登录成功");
         }
 
         _processedKeys.Enqueue(session.Key);
 
-        // 302 路径下 Set-Cookie 一定存在；兜底的是"响应头没给、但 Cookie 容器已持有"的特殊情况。
-        BiliLoginCredentials? credentials = status.Credentials
-            ?? CaptureCredentialsFromCookieContainer();
+        // 凭据只从 Cookie 容器取：302 与 200 两条路径都已经把 Set-Cookie 写进容器了。
+        BiliLoginCredentials? credentials = CaptureCredentialsFromCookieContainer();
 
         if (credentials is null || !credentials.IsComplete)
         {
@@ -679,7 +673,7 @@ public sealed class BiliLoginService : IBiliLoginService
         SetState(LoginState.LoggedIn, "登录成功", profile);
         RaiseLoginSucceeded(profile);
 
-        return new QrLoginResult(QrLoginOutcome.Succeeded, credentials, profile, "登录成功");
+        return new QrLoginResult(QrLoginOutcome.Succeeded, profile, "登录成功");
     }
 
     /// <summary>
@@ -726,37 +720,27 @@ public sealed class BiliLoginService : IBiliLoginService
     private QrLoginResult Fail(LoginState state, string message, QrLoginOutcome outcome)
     {
         SetState(state, message, profile: null);
-        return new QrLoginResult(outcome, null, null, message);
+        return new QrLoginResult(outcome, null, message);
     }
 
     /// <summary>
-    /// 从响应的 <c>Set-Cookie</c> 中抽取凭据并写入 Cookie 容器。
+    /// 从响应的 <c>Set-Cookie</c> 中抽取 Cookie 并写入 Cookie 容器。
     /// </summary>
     /// <param name="setCookies">响应携带的 Set-Cookie 原始值。</param>
-    /// <returns>三个关键 Cookie 齐备时返回凭据，否则返回 <see langword="null"/>。</returns>
-    private BiliLoginCredentials? PublishCredentials(IReadOnlyList<string> setCookies)
+    private void PublishCredentials(IReadOnlyList<string> setCookies)
     {
-        if (setCookies.Count == 0)
-        {
-            return null;
-        }
-
-        var pairs = new List<KeyValuePair<string, string>>();
         foreach (var raw in setCookies)
         {
-            var pair = SplitSetCookie(raw);
-            if (pair is { } kv)
+            if (SplitSetCookie(raw) is { } pair)
             {
-                pairs.Add(kv);
-                SetCookie(kv.Key, kv.Value);
+                SetCookie(pair.Key, pair.Value);
             }
         }
-
-        return BuildCredentials(pairs);
     }
 
     /// <summary>
-    /// 兜底路径：Cookie 容器里已经有 Cookie（例如容器被复用），直接从中取凭据。
+    /// 从 Cookie 容器里取凭据；容器里已有本轮登录写入的 Cookie（见 <see cref="PublishCredentials"/>），
+    /// 所以这是取凭据的唯一入口，不必再区分"响应头给的"与"容器本来就有"。
     /// </summary>
     /// <returns>三个关键 Cookie 齐备时返回凭据，否则返回 <see langword="null"/>。</returns>
     private BiliLoginCredentials? CaptureCredentialsFromCookieContainer()

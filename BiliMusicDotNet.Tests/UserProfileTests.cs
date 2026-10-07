@@ -60,7 +60,8 @@ public sealed class UserProfileTests
             : url.Contains("/qrcode/poll")
                 ? Responses.Redirect(Responses.SetCookies)
                 : throw new HttpRequestException("模拟资料接口不可用"));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
+        var store = new FakeCredentialStore();
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, store);
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
         var result = await service.WaitForConfirmationAsync(
@@ -68,7 +69,7 @@ public sealed class UserProfileTests
 
         Assert.Equal(QrLoginOutcome.Succeeded, result.Outcome);
         Assert.Null(result.Profile);
-        Assert.NotNull(result.Credentials);
+        Assert.NotNull(store.Current);
         Assert.True(service.IsLoggedIn);
     }
 

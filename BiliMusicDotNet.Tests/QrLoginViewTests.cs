@@ -25,7 +25,7 @@ public class QrLoginViewTests
         => new("demo-key", QrContent, DateTimeOffset.Now + (lifetime ?? TimeSpan.FromMinutes(3)));
 
     private static QrStatusResult Status(LoginState state, string message = "0")
-        => new(state, 0, message, null);
+        => new(state, 0, message);
 
     /// <summary>把视图挂进窗口并跑一次布局：绑定要有可视树才会生效。</summary>
     private static async Task<(Window Window, QrLoginView View, QrLoginViewModel Model)> MountAsync(Action? dismiss = null)

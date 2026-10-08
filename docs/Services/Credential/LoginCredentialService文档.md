@@ -33,6 +33,7 @@
 | `08e21b6` `refactor(login): 异常模型集中到 Models/Exceptions` | `BiliApiException` 搬到 `Models/Exceptions/`，为新增 `StorageException` 腾出统一位置 |
 | `153ebe6` `feat(credential): 新增凭据契约与内存持有者` | `StorageException`、`ICredentialService`、`CredentialService`、`CredentialStorageTests` |
 | `553182c` `refactor(login): 凭据改由 CredentialService 持有` | 登录服务删除 `CurrentCredentials`、登录成功落盘、登出与失效清理、`CredentialPersistenceTests`、容器注册 |
+| `ae24b2a` `refactor(login)!: 登录结果不再对外暴露凭据` | 登录结果去掉 `Credentials`：凭据一律经 `CredentialService` 读，探针与测试同步改口 |
 
 分支：`feature/Login`。
 
@@ -40,7 +41,7 @@
 
 ```powershell
 dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
-# 判定依据：Total: 49, Errors: 0, Failed: 0
+# 判定依据：Total: 104, Errors: 0, Failed: 0
 ```
 
 ### 2.3 子功能与测试对照表

@@ -14,9 +14,6 @@
         <OutputType>Exe</OutputType>
         <!-- xunit.v3 要求测试项目产出可执行宿主（apphost）。 -->
         <UseAppHost>true</UseAppHost>
-
-        <!-- 本机沙箱里 Avalonia 的遥测任务无法写 user profile 目录，统一用这个开关关闭它。 -->
-        <UsedAvaloniaProducts></UsedAvaloniaProducts>
     </PropertyGroup>
 
     <ItemGroup>
@@ -33,8 +30,9 @@
       直接引用被测项目：测试从此享有"被测代码重构即变红"的完整保护，
       也让 ViewModel / 视图可用 [AvaloniaFact] 在 Headless 平台上真实跑起来。
 
-      曾因 Avalonia.BuildServices 遥测任务写 %LOCALAPPDATA% 失败而改用"链接源码"，
-      现已用 <UsedAvaloniaProducts></UsedAvaloniaProducts>（项目级）+ AVALONIA_TELEMETRY_OPTOUT 关掉该任务。
+      曾因 Avalonia.BuildServices 遥测任务写 %LOCALAPPDATA% 失败而改用"链接源码"。
+      该任务只能由构建命令行上的 -p:UsedAvaloniaProducts="" 关闭：写在项目文件里无效，
+      Avalonia.props 会把 ;AvaloniaUI 无条件追加进这个属性（见 AGENTS.md）。
     -->
     <ItemGroup>
         <ProjectReference Include="..\BiliMusicDotNet\BiliMusicDotNet.csproj" />

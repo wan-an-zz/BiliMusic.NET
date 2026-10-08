@@ -23,11 +23,26 @@ public sealed class NLogSink : ILogSink
 
     /// <inheritdoc />
     public void Log(LogEventLevel level, string area, object? source, string messageTemplate)
-        => GetLogger(area).Log(ToNLogLevel(level), messageTemplate);
+    {
+        if (level == LogEventLevel.Fatal ||
+            level == LogEventLevel.Error ||
+            level == LogEventLevel.Warning)
+        {
+            GetLogger(area).Log(ToNLogLevel(level), messageTemplate);
+        }
+    }
 
     /// <inheritdoc />
-    public void Log(LogEventLevel level, string area, object? source, string messageTemplate, params object?[] propertyValues)
-        => GetLogger(area).Log(ToNLogLevel(level), messageTemplate, propertyValues);
+    public void Log(LogEventLevel level, string area, object? source, string messageTemplate,
+        params object?[] propertyValues)
+    {
+        if (level == LogEventLevel.Fatal ||
+            level == LogEventLevel.Error ||
+            level == LogEventLevel.Warning)
+        {
+            GetLogger(area).Log(ToNLogLevel(level), messageTemplate, propertyValues);
+        }
+    }
 
     // 用 area 作为 logger 名（Avalonia.Renderer、Avalonia.Binding …），便于按来源单独配置规则。
     private NLog.Logger GetLogger(string area)
@@ -35,12 +50,9 @@ public sealed class NLogSink : ILogSink
 
     private static LogLevel ToNLogLevel(LogEventLevel level) => level switch
     {
-        LogEventLevel.Verbose => LogLevel.Trace,
-        LogEventLevel.Debug => LogLevel.Debug,
-        LogEventLevel.Information => LogLevel.Info,
         LogEventLevel.Warning => LogLevel.Warn,
         LogEventLevel.Error => LogLevel.Error,
         LogEventLevel.Fatal => LogLevel.Fatal,
-        _ => LogLevel.Debug,
+        _ => LogLevel.Warn,
     };
 }

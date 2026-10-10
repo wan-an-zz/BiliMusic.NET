@@ -3,6 +3,7 @@ using Avalonia;
 using BiliMusicDotNet.Abstracts;
 using BiliMusicDotNet.DependencyInjection;
 using BiliMusicDotNet.Desktop.Services;
+using BiliMusicDotNet.Fonts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BiliMusicDotNet.Desktop;
@@ -28,6 +29,7 @@ sealed class Program
 #if DEBUG
             .WithDeveloperTools()
 #endif
+            .WithHarmonyOsSansFont()
             .WithInterFont();
 
     private static IServiceProvider ConfigureServices()

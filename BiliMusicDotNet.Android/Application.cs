@@ -6,6 +6,7 @@ using Avalonia.Android;
 using BiliMusicDotNet.Abstracts;
 using BiliMusicDotNet.Android.Services;
 using BiliMusicDotNet.DependencyInjection;
+using BiliMusicDotNet.Fonts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BiliMusicDotNet.Android
@@ -23,6 +24,7 @@ namespace BiliMusicDotNet.Android
             App.Services ??= BuildServices();
 
             return base.CustomizeAppBuilder(builder)
+                .WithHarmonyOsSansFont()
                 .WithInterFont();
         }
 

@@ -18,6 +18,11 @@
                 <!-- 导航图标路径数据，两端导航控件共用。 -->
                 <MergeResourceInclude Source="avares://BiliMusicDotNet/Styles/Icons.axaml"/>
             </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
+
+        <!-- SukiUI 用 DefaultFontFamily、Fluent 用 ContentControlThemeFontFamily，两处都要覆盖才能全局生效；
+             字体集合在 AppBuilderFontExtensions 里注册，Inter 与 $Default 只作缺字兜底。 -->
+        <FontFamily x:Key="DefaultFontFamily">fonts:HarmonyOsSans#HarmonyOS Sans SC, fonts:Inter#Inter, $Default</FontFamily>
+        <FontFamily x:Key="ContentControlThemeFontFamily">fonts:HarmonyOsSans#HarmonyOS Sans SC, fonts:Inter#Inter, $Default</FontFamily>
+    </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -53,8 +53,7 @@
                         <!-- 只在悬停时可见；具体可见性由上面的样式按 :pointerover 控制。 -->
                         <Border Classes="avatar-overlay"
                                 CornerRadius="75"
-                                Background="#949292"
-                                Opacity="0.5">
+                                Background="#60949292">
                             <TextBlock Text="{Binding AvatarActionText}"
                                        Foreground="White"
                                        FontSize="15"

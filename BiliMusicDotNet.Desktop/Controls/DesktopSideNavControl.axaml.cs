@@ -29,7 +29,7 @@ namespace BiliMusicDotNet.Desktop.Controls;
 public partial class DesktopSideNavControl : UserControl
 {
     /// <summary>指示器淡出 / 淡入的等待时长。</summary>
-    private const int FadePhaseDelayMs = 180;
+    private const int FadePhaseDelayMs = 220;
 
     /// <summary>指示器平移的过渡时长。</summary>
     private const int TranslateDurationMs = 220;

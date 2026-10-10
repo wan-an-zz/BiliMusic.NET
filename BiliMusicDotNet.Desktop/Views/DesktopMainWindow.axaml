@@ -24,7 +24,7 @@
     <Border x:Name="GlassBorder"
             CornerRadius="16"
             ClipToBounds="True"
-            Opacity="0.8"
+            Opacity="0.85"
             Background="White">
 
         <Border.Styles>

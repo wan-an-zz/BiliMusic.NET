@@ -19,6 +19,7 @@
 
     <ItemGroup>
         <PackageReference Include="Avalonia.Android"/>
+        <PackageReference Include="CherylUI" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
         <PackageReference Include="NLog" />
         <PackageReference Include="SukiUI" />

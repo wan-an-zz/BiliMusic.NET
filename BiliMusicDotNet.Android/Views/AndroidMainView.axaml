@@ -4,10 +4,13 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:BiliMusicDotNet.ViewModels;assembly=BiliMusicDotNet"
              xmlns:ac="clr-namespace:BiliMusicDotNet.Android.Controls"
+             xmlns:cheryl="clr-namespace:CherylUI.Controls;assembly=CherylUI"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:DataType="vm:MainViewModel"
              x:Class="BiliMusicDotNet.Android.Views.AndroidMainView">
     
-    <ac:BottomNavControl ItemsResource="{Binding AllViews}"/>
+    <cheryl:InteractiveContainer>
+        <ac:BottomNavControl ItemsResource="{Binding AllViews}"/>
+    </cheryl:InteractiveContainer>
     
 </UserControl>

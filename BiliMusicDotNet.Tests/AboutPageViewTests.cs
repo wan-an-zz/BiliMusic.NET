@@ -189,7 +189,7 @@ public class AboutPageViewTests
         var window = await MountAsync(view);
 
         var dismissed = 0;
-        model.DialogManager.OnDialogDismissed += (_, _) => dismissed++;
+        model.DialogManagerAndroid.OnDialogDismissed += (_, _) => dismissed++;
 
         await model.BeginLogin();
         await RelayoutAsync(window);

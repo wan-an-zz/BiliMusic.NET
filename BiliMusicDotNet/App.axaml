@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="BiliMusicDotNet.App"
              xmlns:sukiUi="clr-namespace:SukiUI;assembly=SukiUI"
+             xmlns:cheryl="clr-namespace:CherylUI.Controls;assembly=CherylUI"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
@@ -9,7 +10,14 @@
 
     <Application.Styles>
         <FluentTheme />
-        <sukiUi:SukiTheme ThemeColor="Blue" Locale="zh-CN"/>
+        <OnPlatform>
+            <On Options="Windows">
+                <sukiUi:SukiTheme ThemeColor="Blue" Locale="zh-CN"/>
+            </On>
+            <On Options="Android">
+                <StyleInclude Source="avares://CherylUI/Index.axaml"/>
+            </On>
+        </OnPlatform>
     </Application.Styles>
 
     <Application.Resources>

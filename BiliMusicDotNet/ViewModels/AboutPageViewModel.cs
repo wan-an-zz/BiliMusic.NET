@@ -14,6 +14,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SukiUI.Dialogs;
+using CherylUI.Dialogs;
 
 namespace BiliMusicDotNet.ViewModels;
 
@@ -56,8 +57,11 @@ public sealed partial class AboutPageViewModel : ViewModelBase
         _messenger.Register<ReLoginRequestMessage>(this, (_, _) => _ = BeginLogin());
     }
 
-    /// <summary>页面上的弹窗管理器；视图里的 <c>SukiDialogHost</c> 绑它。</summary>
-    public ISukiDialogManager DialogManager { get; } = new SukiDialogManager();
+    /// <summary>页面上的弹窗管理器；视图里的 <c>SukiDialogHost</c> 绑它。仅用于Windows平台</summary>
+    public ISukiDialogManager DialogManagerWindows { get; } = new SukiDialogManager();
+
+    /// <summary>页面上的弹窗管理器；视图里的 <c>SukiDialogHost</c> 绑它。仅用于 Android平台</summary>
+    public ICherylDialogManager DialogManagerAndroid { get; } = new CherylDialogManager();
 
     /// <summary>圆形图标显示的内容：未登录是应用图标，已登录是头像。</summary>
     [ObservableProperty]
@@ -101,8 +105,9 @@ public sealed partial class AboutPageViewModel : ViewModelBase
         SubscribeLoginSucceeded();
 
         var qrViewModel = new QrLoginViewModel(DismissDialog, _messenger);
-        
-        if (!DialogManager.CreateDialog()
+
+#if WINDOWS
+        if (!DialogManagerWindows.CreateDialog()
                 .WithTitle("扫码登录")
                 .WithContent(qrViewModel)
                 .Dismiss().ByClickingBackground()
@@ -113,7 +118,22 @@ public sealed partial class AboutPageViewModel : ViewModelBase
             qrViewModel.Cancel();
             return;
         }
+#endif
 
+#if ANDROID
+        if (!DialogManagerAndroid.CreateDialog()
+                .WithTitle("扫码登录")
+                .WithContent(qrViewModel)
+                .Dismiss().ByClickingBackground()
+                .OnDismissed(_ => qrViewModel.Cancel())
+                .TryShow())
+        {
+            _logger.LogWarning("已有弹窗在显示，本次登录未开始");
+            qrViewModel.Cancel();
+            return;
+        }
+#endif
+        
         try
         {
             var session = await _loginService.CreateQrSessionAsync(qrViewModel.Token).ConfigureAwait(true);
@@ -144,15 +164,16 @@ public sealed partial class AboutPageViewModel : ViewModelBase
     /// </summary>
     public void RequestLogout()
     {
-        if (!DialogManager.CreateDialog()
+#if WINDOWS
+        if (!DialogManagerWindows.CreateDialog()
                 .WithTitle("退出登录")
                 .WithContent($"确定要退出「{UserName}」吗？")
-                .WithActionButton("取消", _ => DialogManager.DismissDialog(), false, "Flat")
+                .WithActionButton("取消", _ => DialogManagerWindows.DismissDialog(), false, "Flat")
                 .WithActionButton(
                     "退出登录",
                     _ =>
                     {
-                        DialogManager.DismissDialog();
+                        DialogManagerWindows.DismissDialog();
                         Logout();
                     },
                     dismissOnClick: false,
@@ -161,6 +182,28 @@ public sealed partial class AboutPageViewModel : ViewModelBase
         {
             _logger.LogWarning("已有弹窗在显示，本次登出未开始");
         }
+#endif
+        
+#if ANDROID
+        if (!DialogManagerAndroid.CreateDialog()
+                .WithTitle("退出登录")
+                .WithContent($"确定要退出「{UserName}」吗？")
+                .WithActionButton("取消", _ => DialogManagerAndroid.DismissDialog(), false, "Text")
+                .WithActionButton(
+                    "退出登录",
+                    _ =>
+                    {
+                        DialogManagerAndroid.DismissDialog();
+                        Logout();
+                    },
+                    dismissOnClick: false,
+                    classes: ["Secondary"])
+                .TryShow())
+        {
+            _logger.LogWarning("已有弹窗在显示，本次登出未开始");
+        }
+#endif
+        
     }
 
     /// <summary>
@@ -260,7 +303,16 @@ public sealed partial class AboutPageViewModel : ViewModelBase
         HeadPhoto = LoadPlaceholder();
     }
 
-    private void DismissDialog() => DialogManager.DismissDialog();
+    private void DismissDialog()
+    {
+#if WINDOWS
+        DialogManagerWindows.DismissDialog();
+#endif
+        
+#if ANDROID
+        DialogManagerAndroid.DismissDialog();
+#endif
+    } 
 
     private Bitmap? LoadPlaceholder()
     {

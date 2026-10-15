@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:BiliMusicDotNet.ViewModels"
              xmlns:suki="clr-namespace:SukiUI.Controls;assembly=SukiUI"
+             xmlns:cheryl="clr-namespace:CherylUI.Controls;assembly=CherylUI"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:DataType="vm:AboutPageViewModel"
              x:Class="BiliMusicDotNet.Views.AboutPageView">
@@ -76,6 +77,13 @@
             </Grid>
         </ScrollViewer>
 
-        <suki:SukiDialogHost Manager="{Binding DialogManager}" ZIndex="1" />
+        <OnPlatform>
+            <On Options="Windows">
+                <suki:SukiDialogHost Manager="{Binding DialogManagerWindows}" ZIndex="1" />
+            </On>
+            <On Options="Android">
+                <cheryl:CherylDialogHost Manager="{Binding DialogManagerAndroid}" ZIndex="1"/>
+            </On>
+        </OnPlatform>
     </Panel>
 </UserControl>

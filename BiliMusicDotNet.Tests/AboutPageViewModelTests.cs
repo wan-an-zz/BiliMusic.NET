@@ -122,7 +122,7 @@ public class AboutPageViewModelTests
         var login = new HeadlessServices.StubLoginService { IsLoggedIn = false };
         var vm = NewViewModel(login);
         string? title = null;
-        vm.DialogManager.OnDialogShown += (_, e) => title = e.Dialog.Title;
+        vm.DialogManagerAndroid.OnDialogShown += (_, e) => title = e.Dialog.Title;
 
         vm.OnAvatarPointerPressed();
 
@@ -137,8 +137,8 @@ public class AboutPageViewModelTests
         var vm = NewViewModel(login);
         var shown = 0;
         var dismissed = 0;
-        vm.DialogManager.OnDialogShown += (_, _) => shown++;
-        vm.DialogManager.OnDialogDismissed += (_, _) => dismissed++;
+        vm.DialogManagerAndroid.OnDialogShown += (_, _) => shown++;
+        vm.DialogManagerAndroid.OnDialogDismissed += (_, _) => dismissed++;
 
         await vm.BeginLogin();
 
@@ -159,8 +159,8 @@ public class AboutPageViewModelTests
         var vm = NewViewModel(login);
         var shown = 0;
         var dismissed = 0;
-        vm.DialogManager.OnDialogShown += (_, _) => shown++;
-        vm.DialogManager.OnDialogDismissed += (_, _) => dismissed++;
+        vm.DialogManagerAndroid.OnDialogShown += (_, _) => shown++;
+        vm.DialogManagerAndroid.OnDialogDismissed += (_, _) => dismissed++;
 
         await vm.BeginLogin();
 

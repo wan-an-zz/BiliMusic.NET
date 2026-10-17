@@ -61,6 +61,9 @@ dotnet run --project tools/LoginQrProbe -- --offline
 凭据失效 → `false` 且不残留登录态；磁盘上没有凭据 → `false` 且不发出任何请求。
 自检用的凭据文件写在系统临时目录的 `BiliMusicDotNet.LoginQrProbe/` 下，不碰真实用户目录。
 
+探针不验证加密：它复用测试项目的 `FakeEncryptService`（逐字节异或）而不是 DPAPI，
+这样探针不必被钉死在 Windows 上。加密本身由 `BiliMusicDotNet.Tests/EncryptServiceTests.cs` 覆盖。
+
 ## 二维码渲染
 
 用 **QRCoder** 生成（`AsciiQRCode` 渲染器输出字符画），不自行实现编码器：

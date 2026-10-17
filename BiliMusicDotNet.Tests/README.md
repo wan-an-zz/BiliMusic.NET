@@ -1,6 +1,6 @@
 # BiliMusicDotNet.Tests
 
-`BiliLoginService` / `CredentialService` 等服务的 xUnit 测试，以及基于 Avalonia Headless 的视图 / 视图模型测试。
+xUnit 测试，以及基于 Avalonia Headless 的视图 / 视图模型测试。
 
 ## 怎么跑
 
@@ -13,10 +13,19 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 
 ```
 === TEST EXECUTION SUMMARY ===
-   BiliMusicDotNet.Tests  Total: 104, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
+   BiliMusicDotNet.Tests  Total: 115, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
 ```
 
 **提交前必须全绿（`Failed: 0` 且 `Errors: 0`）**，这是本仓库的提交闸门。
+
+> 当前有 9 个既有的 UI 弹窗用例为红（`AboutPage*Tests` / `QrLoginViewTests`），是上一次控件库切换留下的，
+> 与登录 / 凭据链路无关；判定本条时以"没有新增失败项"为准，基线可用 `git stash -u` 对照。
+
+### 目标框架是 `net10.0-windows`
+
+Windows 端的凭据加密直接用 DPAPI（`System.Security.Cryptography.ProtectedData`）。
+标成可移植的 `net10.0` 就得靠抑制 CA1416 才能编译，等于把平台事实藏起来；带 `-windows` 后缀后
+分析器保持开启，测试也能直接编译 `DpapiEncryptService` 的源码。
 
 ### 为什么不用 `dotnet test`
 
@@ -42,6 +51,11 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 
 凭据持久化同样不碰真实用户目录：`Support/TempDirectory.cs` 给每个用例一个临时应用数据根目录，
 `Support/FakeCredentialStore.cs` 则是内存替身（可预置"磁盘上有什么"、可配置落盘失败），供不关心文件的用例使用。
+`Support/FakeEncryptService.cs` 是逐字节异或的可逆替身：它不带平台能力，让共享层测试与探针都能跑。
+
+桌面端的加密实现（`DpapiEncryptService`）靠 `<Compile Include>` 链接进本程序集：
+桌面端是带入口点的 WinExe 应用头，为测一个加密类把 Avalonia.Desktop / SukiUI / NLog 全拖进来不划算；
+链接的仍是同一份源码，桌面端改了这里就会跟着变。
 
 | 测试文件 | 覆盖的子功能 |
 | --- | --- |
@@ -50,8 +64,9 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 | `UserProfileTests.cs` | 用户信息：字段解析、Cookie 域、资料接口失败容错、事件载荷 |
 | `AvatarTests.cs` | 头像下载：字节返回、CDN 所需 Referer、403 与网络异常 |
 | `SessionLifecycleTests.cs` | 登录态恢复（读盘、校验、无凭据时不发请求）、登出、资源释放 |
-| `CredentialStorageTests.cs` | 凭据读写：落盘字段、读回写进 `Current`、损坏与不完整兜底、清理幂等、写盘失败 |
+| `CredentialStorageTests.cs` | 凭据读写：落盘为密文、交给加密服务的明文、读回写进 `Current`、解不开与不完整兜底、清理幂等、写盘失败、旧明文文件清理 |
 | `CredentialPersistenceTests.cs` | 登录/登出/失效与持久化的联动、恢复登录态读盘、落盘失败不阻断登录 |
+| `EncryptServiceTests.cs` | 桌面端加密实现（DPAPI）：加解密往返、密文与明文不同、同一明文两次密文不同、陌生字节抛 `CryptographicException`、从流的当前位置读、与凭据服务串起来的端到端链路 |
 | `HeadlessHostTests.cs` | Headless 宿主自检：`[AvaloniaFact]` 可用、`avares://` 资产与 `IconAbout` 资源真的能取到 |
 | `CountdownFormatTests.cs` | 倒计时文本：`mm:ss` 格式化、不足一秒向上进位、归零即失效 |
 | `QrLoginViewModelTests.cs` | 扫码弹窗：加载态判定（不能用 `WaitingForScan` 判）、四类状态文案、倒计时起停与归零、取消后不再响应 |
@@ -76,6 +91,7 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 - 登录成功必须留下凭据文件，登出与 `nav` 返回 `-101` 时必须把磁盘副本一起删掉。
 - `TryRestoreSessionAsync` 必须自己读盘：磁盘上没凭据时返回 `false` 且**一个请求都不发**。
 - 落盘失败不能让已经成立的登录变成失败（那条路径有过一次真实回归）。
+- 解不开的密文（换机器、密钥失效、文件被改）必须表现为"未登录"，而不是抛异常或返回半份凭据。
 
 ## 离线还原
 

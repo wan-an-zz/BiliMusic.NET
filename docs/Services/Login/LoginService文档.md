@@ -210,7 +210,7 @@ UI 侧只注入 `IBiliLoginService`：凭据的读取、持有与落盘全在服
 
 - 必须是 **Singleton**：登录态与 `CookieContainer` 在服务实例里常驻，
   用 Transient/Scoped 会导致每次拿到新实例、Cookie 丢失。
-- 三个构造函数（无参 / `ILogger<T> + ICredentialService` / `HttpMessageHandler + ILogger<T> + ICredentialService`）中，
+- 两个构造函数（`ILogger<T> + ICredentialService` / `HttpMessageHandler + ILogger<T> + ICredentialService`）中，
   容器会选第一个能解析全部参数的那条，无需额外配置。
 
 ### 4.2 主流程（ViewModel 侧的最简写法）
@@ -292,7 +292,7 @@ UI 侧需要自行添加二维码库依赖（例如 ZXing.Net、QRCoder 等）�
 | 责任 | 归属 |
 | --- | --- |
 | 内存中持有凭据 | `ICredentialService.Current`（**唯一读取入口**，登录服务不再暴露凭据） |
-| 跨启动明文持久化 | `CredentialService`：`<LocalApplicationData>/BiliMusicDotNet/LoginCredential/credentials.json` |
+| 跨启动持久化（加密） | `CredentialService`：`<LocalApplicationData>/BiliMusicDotNet/LoginCredential/credentials.dat` |
 | 恢复登录态 | `TryRestoreSessionAsync(token)`：内部先 `ICredentialService.LoadAsync()` 读盘，再调 `nav` 校验 |
 | 登出 / 失效时删除持久化副本 | 登录服务调用 `ICredentialService.ClearAsync()`，UI 不需要自己删 |
 | 日志 | 只记录路径、Cookie **个数**与 `mid`，绝不输出凭据值 |
@@ -362,7 +362,9 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 | --- | --- |
 | `BiliLoginService(HttpMessageHandler handler, ILogger<BiliLoginService> logger, ICredentialService credentialService)` | 完整注入；单元测试与真机探针走这条（可换假传输、假存储或代理） |
 | `BiliLoginService(ILogger<BiliLoginService> logger, ICredentialService credentialService)` | 容器默认选中的一条 |
-| `BiliLoginService()` | XAML 设计器 / 无容器场景，日志落到 `NullLogger`，凭据服务走默认路径 |
+
+加密改造前存在过无参构造（走默认路径 + `NullLogger`），现在已删除：它内部要新建 `CredentialService`，
+而后者依赖平台相关的 `IEncryptService`，共享层给不出安全的默认值。
 
 - **必须注册为 Singleton**：`services.AddSingleton<IBiliLoginService, BiliLoginService>();`。登录态与 `CookieContainer` 都常驻在实例里，Transient/Scoped 会让每次解析都拿到空会话。
 - 凭据服务同样注册为 Singleton，且必须注册：`services.AddSingleton<ICredentialService, CredentialService>();`（见 §4.7）。
@@ -442,7 +444,7 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 
 | 成员 | 类型 | 说明 |
 | --- | --- | --- |
-| `SessData` | `string` | 等价于账号登录态，持久化为明文、**禁止写日志** |
+| `SessData` | `string` | 等价于账号登录态，加密后落盘、**禁止写日志** |
 | `BiliJct` | `string` | CSRF 令牌，写操作（点赞 / 收藏 / 投币）需作为 `csrf` 参数提交 |
 | `DedeUserId` | `string` | 当前用户 `mid` |
 | `CookieHeader` | `string` | 从 Cookie 容器整理出的完整 Cookie 头，可直接附加给其它 HTTP 客户端 |
@@ -503,7 +505,7 @@ UI 层只需 `Abstracts` + `Models.Login` 两个命名空间即可编译，不�
 | `BiliMusicDotNet/Models/Login/*.cs` | 数据模型（一个类型一个文件）：`QrSession`、`QrStatusResult`、`QrLoginResult`、`QrLoginOutcome`、`LoginState`、`BiliLoginCredentials`、`BiliUserProfile`、三个事件参数 |
 | `BiliMusicDotNet/Models/Exceptions/*.cs` | 异常模型：`BiliApiException`（接口业务码）、`StorageException`（凭据读写失败） |
 | `BiliMusicDotNet/Services/BiliLoginService.cs` | 实现：取码、轮询、凭据组装、用户信息、头像、恢复/登出 |
-| `BiliMusicDotNet/Services/CredentialService.cs` | 实现：凭据的持有、明文落盘与清理 |
+| `BiliMusicDotNet/Services/CredentialService.cs` | 实现：凭据的持有、加密落盘与清理 |
 | `BiliMusicDotNet.Tests/QrSessionTests.cs` | 取码测试 |
 | `BiliMusicDotNet.Tests/QrPollingTests.cs` | 轮询与终止出口测试 |
 | `BiliMusicDotNet.Tests/UserProfileTests.cs` | 用户信息抓取测试 |

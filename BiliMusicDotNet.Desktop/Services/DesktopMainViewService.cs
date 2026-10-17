@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Desktop.Views;
 using BiliMusicDotNet.ViewModels;
 using BiliMusicDotNet.Views;
 
@@ -11,8 +12,8 @@ namespace BiliMusicDotNet.Desktop.Services;
 public sealed class DesktopMainViewService : IMainViewService
 {
     /// <inheritdoc />
-    public Control CreateMainView(MainViewModel viewModel) => new MainWindow
+    public Control CreateMainView(MainViewModel viewModel) => new DesktopMainWindow
     {
-        DataContext = viewModel,
+        DataContext = viewModel
     };
 }

@@ -34,11 +34,16 @@ public class ViewLocator : IDataTemplate
             return NotFound(name);
 
         // 优先交给容器创建：视图同样享有构造函数注入。
-        if (_services.GetService(type) is Control registered)
-            return registered;
+        var control = _services.GetService(type) as Control
+            // 兜底：未注册到容器的视图仍按无参构造创建，保持模板原有行为。
+            ?? Activator.CreateInstance(type) as Control;
 
-        // 兜底：未注册到容器的视图仍按无参构造创建，保持模板原有行为。
-        return Activator.CreateInstance(type) as Control ?? NotFound(name);
+        if (control is null)
+            return NotFound(name);
+        
+        control.DataContext ??= param;
+
+        return control;
     }
 
     public bool Match(object? data)

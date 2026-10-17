@@ -10,3 +10,9 @@ AGENTS.md
 # 几十 MB 二进制，不入库；联网环境走官方源时也不需要它）。
 BiliMusicDotNet.Tests/.nuget-offline-feed/
 tools/**/.nuget-offline-feed/
+docs/plans/
+BiliMusicDotNet/ViewModels/Tests
+BiliMusicDotNet/Views/Tests
+
+# 开发过程中的一次性脚本与中间产物（压缩图片、探针输出等），不入库。
+.tmp-meta/

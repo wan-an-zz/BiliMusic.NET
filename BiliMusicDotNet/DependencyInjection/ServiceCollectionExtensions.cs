@@ -3,6 +3,7 @@ using BiliMusicDotNet.Logging;
 using BiliMusicDotNet.Services;
 using BiliMusicDotNet.ViewModels;
 using BiliMusicDotNet.Views;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BiliMusicDotNet.DependencyInjection;
@@ -20,14 +21,24 @@ public static class ServiceCollectionExtensions
         
         services.AddSingleton<ViewLocator>();
 
+        // Messenger
+        services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
+
         // ViewModels
         services.AddSingleton<MainViewModel>();
+        services.AddTransient<AboutPageViewModel>();
+        services.AddTransient<RecommendationPageViewModel>();
 
         // Views
         services.AddTransient<MainView>();
         services.AddTransient<MainWindow>();
+        services.AddTransient<AboutPageView>();
+        services.AddTransient<RecommendationPageView>();
+        services.AddTransient<QrLoginView>();
         
         // Services
+        // 凭据服务先注册：登录服务依赖它读取与落盘凭据。
+        services.AddSingleton<ICredentialService, CredentialService>();
         services.AddSingleton<IBiliLoginService, BiliLoginService>();
 
         return services;

@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:BiliMusicDotNet.ViewModels"
+             xmlns:suki="clr-namespace:SukiUI.Controls;assembly=SukiUI"
+             xmlns:cheryl="clr-namespace:CherylUI.Controls;assembly=CherylUI"
+             mc:Ignorable="d" d:DesignWidth="320" d:DesignHeight="420"
+             x:Class="BiliMusicDotNet.Views.QrLoginView"
+             x:DataType="vm:QrLoginViewModel">
+
+    <!-- 取码期间 BusyArea 压暗内容并盖一层加载动画；拿到码后 IsBusy 置 false。 -->
+    <OnPlatform>
+        <On Options="Windows">
+            <suki:BusyArea IsBusy="{Binding IsBusy}">
+                <StackPanel HorizontalAlignment="Center" Spacing="14" Margin="0,4">
+
+                    <!-- 静区由渲染器画进像素里，这里不再留外边距；位图放大用最近邻，避免格线发虚。
+                         没有位图时连元素一起收起，否则成功/失效后会在原地留一块 220 的空白。 -->
+                    <Image x:Name="QrImageWindows"
+                           Source="{Binding QrImage}"
+                           IsVisible="{Binding QrImage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Width="220" Height="220"
+                           Stretch="Uniform"
+                           RenderOptions.BitmapInterpolationMode="None"
+                           HorizontalAlignment="Center" />
+
+                    <TextBlock Text="{Binding RemainingText, StringFormat='二维码剩余 {0}'}"
+                               IsVisible="{Binding ShowCountdown}"
+                               HorizontalAlignment="Center"
+                               FontSize="15"
+                               FontWeight="SemiBold" />
+
+                    <TextBlock Text="{Binding StatusText}"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="280" 
+                               FontWeight="SemiBold"/>
+
+                    <Button x:Name="RefetchButtonWindows"
+                            Classes="Flat Accent"
+                            Content="重新取码"
+                            IsVisible="{Binding ShowRefetch}"
+                            Command="{Binding RefetchCommand}"
+                            HorizontalAlignment="Center" />
+                </StackPanel>
+            </suki:BusyArea>
+        </On>
+        <On Options="Android">
+            <cheryl:BusyArea IsBusy="{Binding IsBusy}">
+                <StackPanel HorizontalAlignment="Center" Spacing="14" Margin="0,4">
+                    
+                    <Image x:Name="QrImageAndroid"
+                           Source="{Binding QrImage}"
+                           IsVisible="{Binding QrImage, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           Width="220" Height="220"
+                           Stretch="Uniform"
+                           RenderOptions.BitmapInterpolationMode="None"
+                           HorizontalAlignment="Center" />
+
+                    <TextBlock Text="{Binding RemainingText, StringFormat='二维码剩余 {0}'}"
+                               IsVisible="{Binding ShowCountdown}"
+                               HorizontalAlignment="Center"
+                               FontSize="15"
+                               FontWeight="SemiBold" />
+
+                    <TextBlock Text="{Binding StatusText}"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="280" 
+                               FontWeight="SemiBold"/>
+
+                    <Button x:Name="RefetchButtonAndroid"
+                            Classes="Secondary"
+                            Content="重新取码"
+                            IsVisible="{Binding ShowRefetch}"
+                            Command="{Binding RefetchCommand}"
+                            HorizontalAlignment="Center" />
+                </StackPanel>
+            </cheryl:BusyArea>
+        </On>
+    </OnPlatform>
+</UserControl>

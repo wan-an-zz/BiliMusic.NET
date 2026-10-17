@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Models.Exceptions;
+using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
 using BiliMusicDotNet.Tests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,7 +18,7 @@ public sealed class QrSessionTests
     public async Task 取码_返回二维码内容与轮询凭据()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.GenerateBody));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         var session = await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
@@ -32,21 +34,21 @@ public sealed class QrSessionTests
     public async Task 取码_推进状态并触发StateChanged()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.GenerateBody));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
-        var states = new List<IBiliLoginService.LoginState>();
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
+        var states = new List<LoginState>();
         service.StateChanged += (_, e) => states.Add(e.State);
 
         await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(IBiliLoginService.LoginState.WaitingForScan, service.State);
-        Assert.Equal([IBiliLoginService.LoginState.WaitingForScan], states);
+        Assert.Equal(LoginState.WaitingForScan, service.State);
+        Assert.Equal([LoginState.WaitingForScan], states);
     }
 
     [Fact]
     public async Task 取码_请求带passport域Referer与浏览器UA()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json(Responses.GenerateBody));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
         await service.CreateQrSessionAsync(TestContext.Current.CancellationToken);
 
@@ -65,22 +67,22 @@ public sealed class QrSessionTests
     {
         var handler = new FakeBiliHandler(
             _ => Responses.Json($$"""{"code":{{code}},"message":"{{message}}","ttl":1}"""));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
-        var exception = await Assert.ThrowsAsync<IBiliLoginService.BiliApiException>(
+        var exception = await Assert.ThrowsAsync<BiliApiException>(
             () => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(code, exception.Code);
-        Assert.Equal(IBiliLoginService.LoginState.Idle, service.State);
+        Assert.Equal(LoginState.Idle, service.State);
     }
 
     [Fact]
     public async Task 取码_响应缺少二维码字段时抛BiliApiException()
     {
         var handler = new FakeBiliHandler(_ => Responses.Json("""{"code":0,"message":"0","ttl":1,"data":{}}"""));
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
-        await Assert.ThrowsAsync<IBiliLoginService.BiliApiException>(() => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<BiliApiException>(() => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -91,8 +93,8 @@ public sealed class QrSessionTests
         {
             Content = new StringContent("<html>blocked</html>", Encoding.UTF8, "text/html"),
         });
-        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance);
+        using var service = new BiliLoginService(handler, NullLogger<BiliLoginService>.Instance, new FakeCredentialStore());
 
-        await Assert.ThrowsAsync<IBiliLoginService.BiliApiException>(() => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<BiliApiException>(() => service.CreateQrSessionAsync(TestContext.Current.CancellationToken));
     }
 }

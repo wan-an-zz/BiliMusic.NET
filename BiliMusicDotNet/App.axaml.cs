@@ -44,8 +44,8 @@ public partial class App : Application
         {
             case IClassicDesktopStyleApplicationLifetime desktop:
             {
-                var mainView = viewService.CreateMainView(viewModel);
-                desktop.MainWindow = mainView as Window ?? new Window { Content = mainView };
+                // 主视图服务返回的就是窗口本身（桌面端），直接挂为主窗口。
+                desktop.MainWindow = viewService.CreateMainView(viewModel) as Window;
                 break;
             }
 

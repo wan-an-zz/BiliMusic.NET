@@ -1,0 +1,115 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:BiliMusicDotNet.ViewModels;assembly=BiliMusicDotNet"
+        xmlns:dc="clr-namespace:BiliMusicDotNet.Desktop.Controls"
+        xmlns:sukiUi="clr-namespace:SukiUI;assembly=SukiUI"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="BiliMusicDotNet.Desktop.Views.DesktopMainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="BiliMusic.NET"
+        Width="1280" Height="800"
+        MinWidth="960" MinHeight="600"
+        WindowStartupLocation="CenterScreen"
+        WindowDecorations="None"
+        ExtendClientAreaTitleBarHeightHint="0"
+        TransparencyLevelHint="Blur"
+        Background="Transparent">
+    
+    <Window.Styles>
+        <sukiUi:SukiTheme ThemeColor="Blue" Locale="zh-CN"/> 
+    </Window.Styles>
+    
+    <Border x:Name="GlassBorder"
+            CornerRadius="16"
+            ClipToBounds="True"
+            Opacity="0.85"
+            Background="White">
+
+        <Border.Styles>
+            <!-- 窗口控制按钮：图标样式，无背景色块 -->
+            <Style Selector="Button.win-btn">
+                <Setter Property="Width" Value="30"/>
+                <Setter Property="Height" Value="30"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="CornerRadius" Value="6"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Opacity" Value="0.65"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Transitions">
+                    <Transitions>
+                        <DoubleTransition Property="Opacity" Duration="0:0:0.15"/>
+                    </Transitions>
+                </Setter>
+            </Style>
+            <Style Selector="Button.win-btn:pointerover">
+                <Setter Property="Opacity" Value="1"/>
+            </Style>
+            <Style Selector="Button.win-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="#14000000"/>
+            </Style>
+            <Style Selector="Button.win-btn /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+            <Style Selector="Button.win-btn:focus /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+            <Style Selector="Button.win-btn:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+            </Style>
+        </Border.Styles>
+        
+        <Grid Margin="12">
+
+            <dc:DesktopSideNavControl x:Name="SideNav" 
+                                      VerticalAlignment="Stretch" 
+                                      ItemsResource="{Binding AllViews}"/>
+
+            <!-- 自实现标题栏 -->
+            <Panel x:Name="TitleBarChrome"
+                   Height="44"
+                   Margin="89,5,5,0"
+                   VerticalAlignment="Top"
+                   HorizontalAlignment="Stretch">
+                <Border Background="Transparent"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
+                        PointerPressed="OnDragAreaPointerPressed"/>
+
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Margin="0,0,6,0"
+                            Spacing="2">
+                    <Button Classes="win-btn" Click="OnMinimizeClick" ToolTip.Tip="最小化" CornerRadius="5">
+                        <PathIcon Data="M5 16H19V18H5V16Z"
+                                  Width="16" Height="16"
+                                  Foreground="#3C3C43"
+                                  Margin="3"/>
+                    </Button>
+                    <Button Classes="win-btn" Click="OnMaximizeClick" ToolTip.Tip="最大化" CornerRadius="5">
+                        <PathIcon Data="M5 5H19V19H5V5M7 7V17H17V7H7Z"
+                                  Width="16" Height="16"
+                                  Foreground="#3C3C43"
+                                  Margin="3"/>
+                    </Button>
+                    <Button Classes="win-btn" Click="OnCloseClick" ToolTip.Tip="关闭" CornerRadius="5">
+                        <PathIcon Data="M6.4 5L12 10.6L17.6 5L19 6.4L13.4 12L19 17.6L17.6 19L12 13.4L6.4 19L5 17.6L10.6 12L5 6.4L6.4 5Z"
+                                  Width="16" Height="16"
+                                  Foreground="#3C3C43"
+                                  Margin="3"/>
+                    </Button>
+                </StackPanel>
+            </Panel>
+        </Grid>
+    </Border>
+</Window>

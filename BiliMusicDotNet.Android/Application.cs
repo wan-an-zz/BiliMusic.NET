@@ -6,6 +6,7 @@ using Avalonia.Android;
 using BiliMusicDotNet.Abstracts;
 using BiliMusicDotNet.Android.Services;
 using BiliMusicDotNet.DependencyInjection;
+using BiliMusicDotNet.Fonts;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BiliMusicDotNet.Android
@@ -23,6 +24,7 @@ namespace BiliMusicDotNet.Android
             App.Services ??= BuildServices();
 
             return base.CustomizeAppBuilder(builder)
+                .WithHarmonyOsSansFont()
                 .WithInterFont();
         }
 
@@ -30,8 +32,9 @@ namespace BiliMusicDotNet.Android
         {
             var services = new ServiceCollection()
                 .AddBiliMusicDotNet()
-                // 平台特定实现：Android 用单视图形态的主界面。
-                .AddSingleton<IMainViewService, AndroidMainViewService>();
+                // 平台特定实现
+                .AddSingleton<IMainViewService, AndroidMainViewService>()
+                .AddSingleton<IEncryptService, AndroidKeystoreEncryptService>();
 
             // 构建期校验：注册缺失 / 生命周期错误在启动时立即暴露。
             return services.BuildServiceProvider(new ServiceProviderOptions

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net10.0-windows</TargetFramework>
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
         <!-- System / System.Collections.Generic / System.Linq / System.Threading.Tasks / System.Net.Http 等基础命名空间。 -->
@@ -14,30 +14,38 @@
         <OutputType>Exe</OutputType>
         <!-- xunit.v3 要求测试项目产出可执行宿主（apphost）。 -->
         <UseAppHost>true</UseAppHost>
-
-        <!-- 本机沙箱里 Avalonia 的遥测任务无法写 user profile 目录，统一用这个开关关闭它。 -->
-        <UsedAvaloniaProducts></UsedAvaloniaProducts>
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Avalonia" />
+        <PackageReference Include="Avalonia.Headless" />
+        <PackageReference Include="Avalonia.Headless.XUnit" />
+        <PackageReference Include="CommunityToolkit.Mvvm" />
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection"/>
+        <PackageReference Include="System.Security.Cryptography.ProtectedData"/>
     </ItemGroup>
 
     <!--
-      以"链接源码"而非 ProjectReference 的方式引用被测代码。
+      直接引用被测项目：测试从此享有"被测代码重构即变红"的完整保护，
+      也让 ViewModel / 视图可用 [AvaloniaFact] 在 Headless 平台上真实跑起来。
 
-      原因：核心项目 BiliMusicDotNet 依赖 Avalonia，其构建会执行 Avalonia.BuildServices 遥测任务，
-      而该任务在当前沙箱里无法写入 %LOCALAPPDATA%（UnauthorizedAccessException 直接导致构建失败）。
-      链接源码让测试只承担被测服务的真实依赖（BCL + Microsoft.Extensions.Logging），
-      与本仓库现有的"无测试项目"状态相比前进了一步，且不会因为 UI 框架的构建副作用而变红。
-
-      待 Avalonia 构建副作用不再妨碍 CI 时，建议改为：
-          <ProjectReference Include="..\BiliMusicDotNet\BiliMusicDotNet.csproj" />
-      并删掉下面的 Compile 链接，以获得"测试随被测代码重构自动失败"的完整保护。
+      曾因 Avalonia.BuildServices 遥测任务写 %LOCALAPPDATA% 失败而改用"链接源码"。
+      该任务只能由构建命令行上的 -p:UsedAvaloniaProducts="" 关闭：写在项目文件里无效，
+      Avalonia.props 会把 ;AvaloniaUI 无条件追加进这个属性（见 AGENTS.md）。
     -->
     <ItemGroup>
-        <Compile Include="..\BiliMusicDotNet\Abstracts\IBiliLoginService.cs" Link="Linked\IBiliLoginService.cs"/>
-        <Compile Include="..\BiliMusicDotNet\Services\BiliLoginService.cs" Link="Linked\BiliLoginService.cs"/>
+        <ProjectReference Include="..\BiliMusicDotNet\BiliMusicDotNet.csproj" />
+    </ItemGroup>
+
+    <!--
+      链接而不是引用桌面端项目：那边是带入口点的 WinExe 应用头，
+      为测一个加密类把整个桌面端（Avalonia.Desktop / SukiUI / NLog）拖进来不划算。
+      链接的仍是同一份源码，桌面端改了这里就会跟着变。
+    -->
+    <ItemGroup>
+        <Compile Include="..\BiliMusicDotNet.Desktop\Services\DpapiEncryptService.cs"
+                 Link="Linked\DpapiEncryptService.cs" />
     </ItemGroup>
 </Project>

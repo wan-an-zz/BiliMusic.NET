@@ -30,7 +30,7 @@ dotnet run --project tools/LoginQrProbe -- --offline
 
 | 选项 | 作用 |
 | --- | --- |
-| `--offline` | 只跑离线自检（7 个场景），不访问网络 |
+| `--offline` | 只跑离线自检（9 个场景），不访问网络 |
 | `--no-render` | 不渲染二维码，只打印内容（终端显示异常时自行生成二维码） |
 | `--timeout <分钟>` | 整个流程的超时，默认 5 |
 | `--proxy <地址>` | 显式代理；默认跟随系统代理设置 |
@@ -56,6 +56,13 @@ dotnet run --project tools/LoginQrProbe -- --offline
 | 4 | 凭据三件套齐备 | `Set-Cookie` 解析或 302/200 形态判定有问题 |
 | 5 | `nav` 返回昵称 | **Cookie 域不对**（应为 `bilibili.com`，不是 `passport.bilibili.com`） |
 | 6 | 头像下载到非空字节 | 缺 `Referer` 导致 CDN 403 |
+
+离线自检（`--offline`）另外覆盖恢复登录态的三条分支：磁盘上有凭据且校验通过 → `true`；
+凭据失效 → `false` 且不残留登录态；磁盘上没有凭据 → `false` 且不发出任何请求。
+自检用的凭据文件写在系统临时目录的 `BiliMusicDotNet.LoginQrProbe/` 下，不碰真实用户目录。
+
+探针不验证加密：它复用测试项目的 `FakeEncryptService`（逐字节异或）而不是 DPAPI，
+这样探针不必被钉死在 Windows 上。加密本身由 `BiliMusicDotNet.Tests/EncryptServiceTests.cs` 覆盖。
 
 ## 二维码渲染
 

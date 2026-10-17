@@ -7,6 +7,7 @@ using Avalonia.iOS;
 using Avalonia.Media;
 using BiliMusicDotNet.Abstracts;
 using BiliMusicDotNet.DependencyInjection;
+using BiliMusicDotNet.Fonts;
 using BiliMusicDotNet.iOS.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,6 +27,7 @@ public partial class AppDelegate : AvaloniaAppDelegate<App>
         App.Services ??= BuildServices();
 
         return base.CustomizeAppBuilder(builder)
+            .WithHarmonyOsSansFont()
             .WithInterFont();
     }
 

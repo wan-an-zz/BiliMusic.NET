@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using BiliMusicDotNet;
 using BiliMusicDotNet.Abstracts;
+using BiliMusicDotNet.Desktop.Services;
 using BiliMusicDotNet.Models.Exceptions;
 using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
@@ -45,6 +46,8 @@ internal static class HeadlessServices
         // 登录服务的替身：不落盘、不联网、状态恒为未登录。
         services.AddSingleton<IBiliLoginService>(loginService ?? new StubLoginService());
         services.AddSingleton<ICredentialService, CredentialService>();
+
+        services.AddSingleton<IEncryptService, DpapiEncryptService>();
 
         services.AddSingleton<MainViewModel>();
         services.AddTransient<AboutPageViewModel>();
@@ -140,7 +143,7 @@ internal static class HeadlessServices
         {
             if (ThrowOnLogout)
             {
-                throw new StorageException("删除", @"X:\不可写\credentials.json", new IOException("模拟删除失败"));
+                throw new StorageException("删除", @"X:\不可写\credentials.dat", new IOException("模拟删除失败"));
             }
 
             IsLoggedIn = false;

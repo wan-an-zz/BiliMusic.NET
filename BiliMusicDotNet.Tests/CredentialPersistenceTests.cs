@@ -98,7 +98,7 @@ public sealed class CredentialPersistenceTests
     [Fact]
     public async Task 落盘失败不影响登录成立()
     {
-        var failure = new StorageException("写入", @"X:\不可写\credentials.json", new IOException("模拟磁盘不可写"));
+        var failure = new StorageException("写入", @"X:\不可写\credentials.dat", new IOException("模拟磁盘不可写"));
         var store = new FakeCredentialStore { ThrowOnWrite = failure };
         using var service = NewLoginService(FakeBiliHandler.Succeeding(), store);
 
@@ -164,8 +164,12 @@ public sealed class CredentialPersistenceTests
     /// <summary>临时目录下的真实凭据服务。</summary>
     /// <param name="directory">临时应用数据根目录。</param>
     /// <returns>凭据服务。</returns>
+    /// <remarks>
+    /// 每次新建加密替身：它的异或变换不带状态，换实例照样解得开对方的密文，
+    /// 正好用来验证"落盘和读盘不是同一个对象"。
+    /// </remarks>
     private static CredentialService NewStore(TempDirectory directory)
-        => new(directory.Path, NullLogger<CredentialService>.Instance);
+        => new(directory.Path, new FakeEncryptService(), NullLogger<CredentialService>.Instance);
 
     /// <summary>装配登录服务。</summary>
     /// <param name="handler">假 HTTP 传输。</param>

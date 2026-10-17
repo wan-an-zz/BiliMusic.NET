@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <TargetFramework>net10.0</TargetFramework>
+        <TargetFramework>net10.0-windows</TargetFramework>
         <Nullable>enable</Nullable>
         <LangVersion>latest</LangVersion>
         <!-- System / System.Collections.Generic / System.Linq / System.Threading.Tasks / System.Net.Http 等基础命名空间。 -->
@@ -24,6 +24,7 @@
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
         <PackageReference Include="Microsoft.Extensions.DependencyInjection"/>
+        <PackageReference Include="System.Security.Cryptography.ProtectedData"/>
     </ItemGroup>
 
     <!--
@@ -36,5 +37,15 @@
     -->
     <ItemGroup>
         <ProjectReference Include="..\BiliMusicDotNet\BiliMusicDotNet.csproj" />
+    </ItemGroup>
+
+    <!--
+      链接而不是引用桌面端项目：那边是带入口点的 WinExe 应用头，
+      为测一个加密类把整个桌面端（Avalonia.Desktop / SukiUI / NLog）拖进来不划算。
+      链接的仍是同一份源码，桌面端改了这里就会跟着变。
+    -->
+    <ItemGroup>
+        <Compile Include="..\BiliMusicDotNet.Desktop\Services\DpapiEncryptService.cs"
+                 Link="Linked\DpapiEncryptService.cs" />
     </ItemGroup>
 </Project>

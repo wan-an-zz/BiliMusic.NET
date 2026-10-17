@@ -250,6 +250,7 @@ internal static class OfflineSelfCheck
     private static CredentialService CreateCredentials(string scenario = "offline")
         => new(
             Path.Combine(Path.GetTempPath(), "BiliMusicDotNet.LoginQrProbe", scenario),
+            new FakeEncryptService(),
             NullLogger<CredentialService>.Instance);
 
     /// <summary>跑一个场景，捕获异常并统计失败数。</summary>

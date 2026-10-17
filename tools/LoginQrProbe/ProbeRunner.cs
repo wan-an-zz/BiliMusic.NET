@@ -3,6 +3,7 @@ using System.Net;
 using System.Text;
 using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
+using BiliMusicDotNet.Tests.Support;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -240,7 +241,10 @@ internal static class ProbeRunner
     /// </summary>
     /// <returns>凭据服务。</returns>
     private static CredentialService CreateCredentials()
-        => new(Path.Combine(Path.GetTempPath(), "BiliMusicDotNet.LoginQrProbe"), NullLogger<CredentialService>.Instance);
+        => new(
+            Path.Combine(Path.GetTempPath(), "BiliMusicDotNet.LoginQrProbe"),
+            new FakeEncryptService(),
+            NullLogger<CredentialService>.Instance);
 
     /// <summary>把二维码内容渲染到控制台。</summary>
     /// <param name="content">二维码内容。</param>

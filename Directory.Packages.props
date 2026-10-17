@@ -37,5 +37,6 @@
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <!-- 测试项目直接引用被测服务用到的日志抽象（版本与上面的 Microsoft.Extensions.Logging 保持一致）。 -->
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0-preview.6.26359.118" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 </Project>

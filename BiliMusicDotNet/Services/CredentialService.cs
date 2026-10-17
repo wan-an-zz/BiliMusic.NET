@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -8,14 +9,14 @@ using BiliMusicDotNet.Abstracts;
 using BiliMusicDotNet.Models.Exceptions;
 using BiliMusicDotNet.Models.Login;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace BiliMusicDotNet.Services;
 
 /// <summary>
-/// <see cref="ICredentialService"/> 的默认实现：单个明文 JSON 文件，只保存当前账号。
+/// <see cref="ICredentialService"/> 的默认实现：单个加密文件，只保存当前账号。
 /// </summary>
 /// <remarks>
+/// 凭据先序列化成 JSON 再交给 <see cref="IEncryptService"/>，磁盘上不出现明文。
 /// 写入先落临时文件再原子替换，避免进程中断留下半个文件；读取失败一律返回空值，由调用方决定是否重新登录。
 /// </remarks>
 public sealed class CredentialService : ICredentialService
@@ -27,30 +28,20 @@ public sealed class CredentialService : ICredentialService
     private const string CredentialFolderName = "LoginCredential";
 
     /// <summary>凭据文件名。</summary>
-    private const string CredentialFileName = "credentials.json";
+    private const string CredentialFileName = "credentials.dat";
 
-    /// <summary>序列化选项。源生成类型在默认构造里按需创建，避免每次读写都重建。</summary>
-    private static readonly JsonSerializerOptions SerializerOptions = new(CredentialJsonContext.Default.Options)
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
+    private readonly IEncryptService _encryptService;
     private readonly ILogger<CredentialService> _logger;
     private readonly string _filePath;
     private BiliLoginCredentials? _current;
 
     /// <summary>
-    /// 供 XAML 设计器与无容器场景实例化；运行期一律由依赖注入提供日志器。
+    /// 由容器创建：日志器与加密服务由依赖注入提供，路径用操作系统约定的应用数据目录。
     /// </summary>
-    public CredentialService() : this(null, NullLogger<CredentialService>.Instance)
-    {
-    }
-
-    /// <summary>
-    /// 由容器创建：日志器由依赖注入提供，路径用操作系统约定的应用数据目录。
-    /// </summary>
+    /// <param name="encryptService">凭据落盘前的加密实现。</param>
     /// <param name="logger">日志器。</param>
-    public CredentialService(ILogger<CredentialService> logger) : this(null, logger)
+    public CredentialService(IEncryptService encryptService, ILogger<CredentialService> logger)
+        : this(null, encryptService, logger)
     {
     }
 
@@ -60,17 +51,20 @@ public sealed class CredentialService : ICredentialService
     /// <param name="baseDirectory">
     /// 应用数据根目录；<see langword="null"/> 时用 <see cref="Environment.SpecialFolder.LocalApplicationData"/>。
     /// </param>
+    /// <param name="encryptService">凭据落盘前的加密实现。</param>
     /// <param name="logger">日志器。</param>
     /// <exception cref="ArgumentException"><paramref name="baseDirectory"/> 是空白字符串。</exception>
-    /// <exception cref="ArgumentNullException"><paramref name="logger"/> 为 <see langword="null"/>。</exception>
-    public CredentialService(string? baseDirectory, ILogger<CredentialService> logger)
+    /// <exception cref="ArgumentNullException"><paramref name="encryptService"/> 或 <paramref name="logger"/> 为 <see langword="null"/>。</exception>
+    public CredentialService(string? baseDirectory, IEncryptService encryptService, ILogger<CredentialService> logger)
     {
         if (baseDirectory is not null && string.IsNullOrWhiteSpace(baseDirectory))
         {
             throw new ArgumentException("应用数据根目录不能是空白字符串", nameof(baseDirectory));
         }
 
+        _encryptService = encryptService ?? throw new ArgumentNullException(nameof(encryptService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
         _filePath = ResolveFilePath(baseDirectory ?? DefaultBaseDirectory());
     }
 
@@ -90,7 +84,7 @@ public sealed class CredentialService : ICredentialService
     /// 某个应用数据根目录下凭据文件的完整路径。
     /// </summary>
     /// <param name="baseDirectory">应用数据根目录。</param>
-    /// <returns>形如 <c>&lt;baseDirectory&gt;\BiliMusicDotNet\LoginCredential\credentials.json</c> 的路径。</returns>
+    /// <returns>形如 <c>&lt;baseDirectory&gt;\BiliMusicDotNet\LoginCredential\credentials.dat</c> 的路径。</returns>
     public static string ResolveFilePath(string baseDirectory)
         => Path.Combine(baseDirectory, AppFolderName, CredentialFolderName, CredentialFileName);
 
@@ -105,8 +99,12 @@ public sealed class CredentialService : ICredentialService
 
         try
         {
-            var json = await File.ReadAllTextAsync(_filePath, cancellationToken).ConfigureAwait(false);
-            var credentials = JsonSerializer.Deserialize(json, CredentialJsonContext.Default.BiliLoginCredentials);
+            var ciphertext = await File.ReadAllBytesAsync(_filePath, cancellationToken).ConfigureAwait(false);
+
+            using var stream = new MemoryStream(ciphertext, writable: false);
+            var plaintext = _encryptService.Decrypt(stream);
+
+            var credentials = JsonSerializer.Deserialize(plaintext, CredentialJsonContext.Default.BiliLoginCredentials);
 
             if (credentials is null || !credentials.IsComplete)
             {
@@ -122,9 +120,9 @@ public sealed class CredentialService : ICredentialService
             _logger.LogInformation("已读回登录凭据：mid={Mid}", credentials.DedeUserId);
             return true;
         }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is CryptographicException or JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            // 损坏的副本只影响"免登录"，重新扫码即可覆盖，因此不抛异常。
+            // 损坏或换机器导致的解不开，只影响"免登录"，重新扫码即可覆盖，因此不抛异常。
             _logger.LogWarning(ex, "凭据文件无法读取，按未登录处理：{Path}", _filePath);
             return false;
         }
@@ -146,11 +144,19 @@ public sealed class CredentialService : ICredentialService
         try
         {
             Directory.CreateDirectory(directory);
-            var json = JsonSerializer.Serialize(credentials, CredentialJsonContext.Default.BiliLoginCredentials);
-            await File.WriteAllTextAsync(temporaryPath, json, cancellationToken).ConfigureAwait(false);
+
+            var plaintext = JsonSerializer.SerializeToUtf8Bytes(credentials, CredentialJsonContext.Default.BiliLoginCredentials);
+
+            byte[] ciphertext;
+            using (var stream = new MemoryStream(plaintext, writable: false))
+            {
+                ciphertext = _encryptService.Encrypt(stream);
+            }
+
+            await File.WriteAllBytesAsync(temporaryPath, ciphertext, cancellationToken).ConfigureAwait(false);
             File.Move(temporaryPath, _filePath, overwrite: true);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
+        catch (Exception ex) when (ex is CryptographicException or JsonException or IOException or UnauthorizedAccessException or NotSupportedException)
         {
             TryDeleteTemporaryFile(temporaryPath);
             _logger.LogError(ex, "凭据写入失败：{Path}", _filePath);
@@ -171,22 +177,19 @@ public sealed class CredentialService : ICredentialService
             _current = null;
         }
 
-        if (!File.Exists(_filePath))
-        {
-            return Task.CompletedTask;
-        }
-
         try
         {
-            File.Delete(_filePath);
+            if (File.Exists(_filePath))
+            {
+                File.Delete(_filePath);
+                _logger.LogInformation("凭据副本已删除：{Path}", _filePath);
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _logger.LogError(ex, "凭据副本删除失败：{Path}", _filePath);
             throw new StorageException("删除", _filePath, ex);
         }
-
-        _logger.LogInformation("凭据副本已删除：{Path}", _filePath);
         return Task.CompletedTask;
     }
 

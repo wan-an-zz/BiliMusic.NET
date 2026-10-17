@@ -5,7 +5,7 @@ using BiliMusicDotNet.Models.Login;
 namespace BiliMusicDotNet.Abstracts;
 
 /// <summary>
-/// 登录凭据的持有者与持久化入口：内存态只此一份，磁盘上是明文 JSON。
+/// 登录凭据的持有者与持久化入口：内存态只此一份，磁盘上是一份加密文件。
 /// </summary>
 /// <remarks>
 /// <see cref="Current"/> 是进程内的唯一读取入口：进程重启后它为空，读盘之后才有值。
@@ -36,7 +36,7 @@ public interface ICredentialService
     /// 调用方若不接受这一点，需在捕获异常后自行清理。
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="credentials"/> 为 <see langword="null"/>。</exception>
-    /// <exception cref="Models.Exceptions.StorageException">建目录、写文件或序列化失败。</exception>
+    /// <exception cref="Models.Exceptions.StorageException">建目录、序列化、加密或写文件失败。</exception>
     Task SaveAsync(BiliLoginCredentials credentials, CancellationToken cancellationToken = default);
 
     /// <summary>

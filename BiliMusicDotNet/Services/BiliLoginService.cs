@@ -99,14 +99,6 @@ public sealed class BiliLoginService : IBiliLoginService
     private LoginState _state = LoginState.Idle;
 
     /// <summary>
-    /// 供 XAML 设计器与无容器场景实例化：凭据服务走默认路径，日志落到 <see cref="NullLogger{T}"/>。
-    /// </summary>
-    public BiliLoginService()
-        : this(new HttpClientHandler(), NullLogger<BiliLoginService>.Instance, new CredentialService())
-    {
-    }
-
-    /// <summary>
     /// 由容器创建：日志器与凭据服务由依赖注入提供，HTTP 传输用默认实现。
     /// </summary>
     /// <param name="logger">日志器。</param>

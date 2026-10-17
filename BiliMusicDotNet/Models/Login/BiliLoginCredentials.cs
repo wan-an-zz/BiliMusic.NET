@@ -8,7 +8,7 @@ namespace BiliMusicDotNet.Models.Login;
 /// <remarks>
 /// record 没有无参构造，反序列化只能走参数化构造函数，因此参数名与 JSON 字段名必须保持一致。
 /// </remarks>
-/// <param name="SessData">登录凭据，等价于账号登录态，持久化为明文，禁止写日志。</param>
+/// <param name="SessData">登录凭据，等价于账号登录态，加密后落盘，禁止写日志。</param>
 /// <param name="BiliJct">CSRF 令牌，所有写操作（点赞/收藏等）需作为 <c>csrf</c> 参数提交。</param>
 /// <param name="DedeUserId">当前用户 <c>mid</c>。</param>
 /// <param name="CookieHeader">

@@ -26,12 +26,17 @@
     <ItemGroup>
         <Compile Include="..\..\BiliMusicDotNet\Abstracts\IBiliLoginService.cs" Link="Linked\IBiliLoginService.cs"/>
         <Compile Include="..\..\BiliMusicDotNet\Abstracts\ICredentialService.cs" Link="Linked\ICredentialService.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet\Abstracts\IEncryptService.cs" Link="Linked\IEncryptService.cs"/>
         <Compile Include="..\..\BiliMusicDotNet\Services\BiliLoginService.cs" Link="Linked\BiliLoginService.cs"/>
         <Compile Include="..\..\BiliMusicDotNet\Services\CredentialService.cs" Link="Linked\CredentialService.cs"/>
         <Compile Include="..\..\BiliMusicDotNet\Models\**\*.cs" Link="Linked\Models\%(RecursiveDir)%(Filename)%(Extension)"/>
         <!-- NavItem 的 Content 是 ViewModelBase：不链接它，Models 通配带进来的 NavItem 就编不过。 -->
         <Compile Include="..\..\BiliMusicDotNet\ViewModels\ViewModelBase.cs" Link="Linked\ViewModels\ViewModelBase.cs"/>
-        <!-- 复用测试项目的假传输做离线自检，避免两处维护同一份预置响应。 -->
+        <!--
+          复用测试项目的假传输与假加密做离线自检，避免两处维护同一份预置响应。
+          用假加密而不是 DPAPI：探针验证的是登录编排，不该因此被钉死在 Windows 上。
+        -->
         <Compile Include="..\..\BiliMusicDotNet.Tests\Support\FakeBiliHandler.cs" Link="Linked\FakeBiliHandler.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet.Tests\Support\FakeEncryptService.cs" Link="Linked\FakeEncryptService.cs"/>
     </ItemGroup>
 </Project>

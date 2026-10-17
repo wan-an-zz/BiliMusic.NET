@@ -36,8 +36,9 @@ sealed class Program
     {
         var services = new ServiceCollection()
             .AddBiliMusicDotNet()
-            // 平台特定实现：桌面端用窗口形态的主界面。
-            .AddSingleton<IMainViewService, DesktopMainViewService>();
+            // 平台特定实现：桌面端用窗口形态的主界面，凭据加密走 DPAPI。
+            .AddSingleton<IMainViewService, DesktopMainViewService>()
+            .AddSingleton<IEncryptService, DpapiEncryptService>();
 
         // 构建期校验：注册缺失 / 生命周期错误在启动时立即暴露。
         return services.BuildServiceProvider(new ServiceProviderOptions

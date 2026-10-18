@@ -5,17 +5,17 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace BiliMusicDotNet.Models.Navigation;
 
 /// <summary>
-/// 导航项的位置分组：A 组位于导航栏两端，B 组位于中间。
+/// 导航项的位置分组：A 组钉在导航栏底部，B 组位于上方区块。
 /// </summary>
 /// <remarks>
-/// 桌面端侧边栏靠它决定选中指示器走哪种动画，见 <c>docs/UI/导航控件文档.md</c>。
+/// 默认 <see cref="B"/>；桌面端侧边栏按它分上方 B 段与底部 A 段，并据此选择指示器动画，见 <c>docs/UI/导航控件文档.md</c>。
 /// </remarks>
 public enum NavGroup
 {
-    /// <summary>两端位置（顶部与底部）。</summary>
+    /// <summary>底部（钉底）。</summary>
     A,
 
-    /// <summary>中间位置。</summary>
+    /// <summary>上方区块（默认）。</summary>
     B,
 }
 

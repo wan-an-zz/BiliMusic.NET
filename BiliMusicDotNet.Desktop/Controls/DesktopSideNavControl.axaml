@@ -116,25 +116,15 @@
                     </Border.Background>
                 </Border>
 
-                <!-- 三段导航项：顶部 A 组 / 分隔线 / 中间 B 组 / 弹性空白 / 底部 A 组 -->
-                <!-- 图标间距由 nav-btn 的 Margin 提供 -->
-                <Grid RowDefinitions="Auto,Auto,Auto,*,Auto"
+                <Grid RowDefinitions="Auto,*,Auto"
                       ZIndex="1" Background="Transparent">
 
                     <ItemsControl Grid.Row="0"
-                                  x:Name="TopItems"
+                                  x:Name="GroupBItems"
                                   ItemTemplate="{Binding ItemTemplate, ElementName=Root}"/>
-
-                    <Border Grid.Row="1" Height="1" Width="36"
-                            HorizontalAlignment="Center" Margin="0,6"
-                            Background="#e8e8ed"/>
 
                     <ItemsControl Grid.Row="2"
-                                  x:Name="MiddleItems"
-                                  ItemTemplate="{Binding ItemTemplate, ElementName=Root}"/>
-
-                    <ItemsControl Grid.Row="4"
-                                  x:Name="BottomItems"
+                                  x:Name="GroupAItems"
                                   ItemTemplate="{Binding ItemTemplate, ElementName=Root}"/>
                 </Grid>
             </Grid>

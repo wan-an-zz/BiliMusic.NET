@@ -40,7 +40,7 @@ public partial class DesktopSideNavControl : UserControl
     /// <summary>导航项数量上限，防止异常数据撑爆位置缓存。</summary>
     private const int MaxNavItems = 64;
 
-    /// <summary>导航项集合，控件按项的 <see cref="NavItem.Group"/> 自行分三段渲染。</summary>
+    /// <summary>导航项集合，控件按项的 <see cref="NavItem.Group"/> 自行分上方 B 组与底部 A 组渲染。</summary>
     public static readonly StyledProperty<ObservableCollection<NavItem>> ItemsResourceProperty =
         AvaloniaProperty.Register<DesktopSideNavControl, ObservableCollection<NavItem>>(
             nameof(ItemsResource), new ObservableCollection<NavItem>());
@@ -50,7 +50,7 @@ public partial class DesktopSideNavControl : UserControl
         AvaloniaProperty.Register<DesktopSideNavControl, IDataTemplate?>(nameof(ItemTemplate));
 
     /// <summary>
-    /// 当前选中项的全局索引，按「顶部 A 组 → 中间 B 组 → 底部 A 组」顺序拼接计数，默认 0。
+    /// 当前选中项的全局索引，按「上方 B 组 → 底部 A 组」顺序拼接计数，默认 0。
     /// </summary>
     public static readonly StyledProperty<int> SelectedIndexProperty =
         AvaloniaProperty.Register<DesktopSideNavControl, int>(
@@ -62,9 +62,8 @@ public partial class DesktopSideNavControl : UserControl
         AvaloniaProperty.RegisterDirect<DesktopSideNavControl, NavItem?>(
             nameof(SelectedItem), o => o.SelectedItem);
 
-    private readonly ObservableCollection<NavItem> _topItems = new();
-    private readonly ObservableCollection<NavItem> _middleItems = new();
-    private readonly ObservableCollection<NavItem> _bottomItems = new();
+    private readonly ObservableCollection<NavItem> _groupBItems = new();
+    private readonly ObservableCollection<NavItem> _groupAItems = new();
     private readonly Dictionary<int, double> _indicatorOffsets = new();
     private NavItem? _selectedItem;
     private CancellationTokenSource? _animationCts;
@@ -75,16 +74,15 @@ public partial class DesktopSideNavControl : UserControl
         InitializeComponent();
 
         SelectItemCommand = new RelayCommand<NavItem?>(SelectItem);
-        TopItems.ItemsSource = _topItems;
-        MiddleItems.ItemsSource = _middleItems;
-        BottomItems.ItemsSource = _bottomItems;
+        GroupBItems.ItemsSource = _groupBItems;
+        GroupAItems.ItemsSource = _groupAItems;
         LayoutUpdated += OnLayoutUpdated;
 
         // 内置模板默认生效，外部设置 ItemTemplate 即覆盖。
         ItemTemplate = (IDataTemplate?)Resources["DefaultNavItemTemplate"];
     }
 
-    /// <summary>导航项集合，控件按项的 <see cref="NavItem.Group"/> 自行分三段渲染。</summary>
+    /// <summary>导航项集合，控件按项的 <see cref="NavItem.Group"/> 自行分上方 B 组与底部 A 组渲染。</summary>
     public ObservableCollection<NavItem> ItemsResource
     {
         get => GetValue(ItemsResourceProperty);
@@ -99,7 +97,7 @@ public partial class DesktopSideNavControl : UserControl
     }
 
     /// <summary>
-    /// 当前选中项的全局索引，按「顶部 A 组 → 中间 B 组 → 底部 A 组」顺序拼接计数。
+    /// 当前选中项的全局索引，按「上方 B 组 → 底部 A 组」顺序拼接计数。
     /// 越界值不抛异常，仅表现为无选中项。
     /// </summary>
     public int SelectedIndex
@@ -129,12 +127,11 @@ public partial class DesktopSideNavControl : UserControl
     /// <summary>导航栏外框，宿主可覆盖它的圆角 / 背景等外观。</summary>
     public Border Sidebar => SidebarHost;
 
-    /// <summary>三段数据源的读取顺序，与全局索引的拼接顺序一致。</summary>
+    /// <summary>两段数据源（B 组在前、A 组在后）的读取顺序，与全局索引的拼接顺序一致。</summary>
     private IReadOnlyList<ObservableCollection<NavItem>> Sections => new[]
     {
-        _topItems,
-        _middleItems,
-        _bottomItems,
+        _groupBItems,
+        _groupAItems,
     };
 
     /// <summary>供模板点击回调：把被点的导航项设为选中项。</summary>
@@ -154,7 +151,7 @@ public partial class DesktopSideNavControl : UserControl
         base.OnPropertyChanged(change);
 
         // 构造期（InitializeComponent 之前）具名元素还没就绪，此时不做任何计算。
-        if (TopItems is null || MiddleItems is null || BottomItems is null)
+        if (GroupBItems is null || GroupAItems is null)
             return;
 
         if (change.Property == ItemsResourceProperty)
@@ -208,26 +205,18 @@ public partial class DesktopSideNavControl : UserControl
         ResetIndicatorToSelection();
     }
 
-    /// <summary>按 <see cref="NavItem.Group"/> 把集合摊进三段，保持各自原有顺序。</summary>
+    /// <summary>按 <see cref="NavItem.Group"/> 把集合分到上方 B 组与底部 A 组，各自保持源顺序。</summary>
     private void Repartition()
     {
-        _topItems.Clear();
-        _middleItems.Clear();
-        _bottomItems.Clear();
+        _groupBItems.Clear();
+        _groupAItems.Clear();
 
         foreach (var item in FlattenItems())
         {
-            if (item.Group != NavGroup.A)
-            {
-                _middleItems.Add(item);
-                continue;
-            }
-
-            // A 组要求「一个钉顶、一个钉底」，多于两个时按先后轮流分配到两端。
-            if (_topItems.Count <= _bottomItems.Count)
-                _topItems.Add(item);
+            if (item.Group == NavGroup.A)
+                _groupAItems.Add(item);
             else
-                _bottomItems.Add(item);
+                _groupBItems.Add(item);
         }
 
         UpdateSelection();
@@ -247,7 +236,7 @@ public partial class DesktopSideNavControl : UserControl
         return items;
     }
 
-    /// <summary>按全局索引顺序摊平三段，与源集合的分段结果一致。</summary>
+    /// <summary>按全局索引顺序摊平两段，与源集合的分段结果一致。</summary>
     private List<NavItem> FlattenSections() => Sections.SelectMany(section => section).ToList();
 
     private int IndexOf(NavItem item)
@@ -316,7 +305,7 @@ public partial class DesktopSideNavControl : UserControl
     }
 
     /// <summary>
-    /// 按三段顺序取出各导航项的容器。
+    /// 按 B 组、A 组的顺序取出各导航项的容器。
     /// </summary>
     /// <remarks>
     /// 不能直接取 <c>ItemsControl</c> 的视觉子级：那拿到的是它模板里的宿主元素，
@@ -324,7 +313,7 @@ public partial class DesktopSideNavControl : UserControl
     /// </remarks>
     private IEnumerable<Control> EnumerateContainers()
     {
-        foreach (var host in new[] { TopItems, MiddleItems, BottomItems })
+        foreach (var host in new[] { GroupBItems, GroupAItems })
         {
             foreach (var container in FindItemContainers(host))
                 yield return container;
@@ -396,7 +385,7 @@ public partial class DesktopSideNavControl : UserControl
 
     /// <summary>
     /// 把元素的 Y 从「相对其父级」累加换算成「相对 <see cref="ContentGrid"/>」。
-    /// 三段各自有 ItemsControl / StackPanel 层级，不累加会让后段的位置偏小。
+    /// B 段与 A 段各有 ItemsControl / StackPanel 层级，A 段还隔着弹性空白，不累加会让它的位置偏小。
     /// </summary>
     private double OffsetFromContentGrid(Control element)
     {
@@ -466,7 +455,7 @@ public partial class DesktopSideNavControl : UserControl
         // 指示器要移走了：旧图标立刻恢复未选中色。
         DeselectItem(oldIndex < items.Count ? items[oldIndex] : null);
 
-        // 只要过渡涉及首尾两端（A 组）就换成淡出淡入，避免指示器长距离掠过中间项。
+        // B 组内部一律平移；只要一端是 A 组（底部段）就换成淡出淡入，避免指示器长距离掠过中间项。
         var involvesGroupA = items[oldIndex].Group == NavGroup.A || items[newIndex].Group == NavGroup.A;
 
         _ = involvesGroupA

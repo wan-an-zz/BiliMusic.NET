@@ -72,7 +72,7 @@ public partial class MainViewModel : ViewModelBase
             {
                 Label = "推荐",
                 Icon = NavIcon.Resolve(NavIcon.Recommendation),
-                Group = NavGroup.A,
+                Group = NavGroup.B,
                 Content = _recommendationPageViewModel
             },
             

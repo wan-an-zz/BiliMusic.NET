@@ -90,7 +90,7 @@
                 Background="White" CornerRadius="14"
                 BoxShadow="0 2 20 0 #0F000000"
                 Padding="10,14" Width="64"
-                Margin="5,5,0,5"
+                Margin="5,0,0,0"
                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
 
             <Grid x:Name="ContentGrid">

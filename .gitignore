@@ -16,3 +16,4 @@ BiliMusicDotNet/Views/Tests
 
 # 开发过程中的一次性脚本与中间产物（压缩图片、探针输出等），不入库。
 .tmp-meta/
+docs/bili_api/

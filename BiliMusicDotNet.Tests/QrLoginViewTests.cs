@@ -113,7 +113,7 @@ public class QrLoginViewTests
 
         Assert.False(CountdownText(view).IsVisible);
         Assert.Contains(Texts(view), t => t.Text == "二维码失效，请重新取码");
-        Assert.True(view.FindControl<Button>("RefetchButton")!.IsVisible);
+        Assert.True(view.FindControl<Button>("RefetchButtonWindows")!.IsVisible);
     }
 
     [AvaloniaFact]
@@ -124,7 +124,7 @@ public class QrLoginViewTests
         model.Receive(Session());
         await Task.Yield();
 
-        Assert.False(view.FindControl<Button>("RefetchButton")!.IsVisible);
+        Assert.False(view.FindControl<Button>("RefetchButtonWindows")!.IsVisible);
     }
 
     [AvaloniaFact]
@@ -155,7 +155,7 @@ public class QrLoginViewTests
         model.Apply(Status(LoginState.Expired, "失效"));
         await Task.Yield();
 
-        view.FindControl<Button>("RefetchButton")!.Command?.Execute(null);
+        view.FindControl<Button>("RefetchButtonWindows")!.Command?.Execute(null);
 
         Assert.True(dismissed);
     }

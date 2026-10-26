@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
         // 凭据服务先注册：登录服务依赖它读取与落盘凭据。
         services.AddSingleton<ICredentialService, CredentialService>();
         services.AddSingleton<IBiliLoginService, BiliLoginService>();
+        services.AddSingleton<ISettingService, SettingService>();
 
         return services;
     }

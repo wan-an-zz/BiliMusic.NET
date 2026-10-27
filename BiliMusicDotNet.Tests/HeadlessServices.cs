@@ -9,6 +9,7 @@ using BiliMusicDotNet.Desktop.Services;
 using BiliMusicDotNet.Models.Exceptions;
 using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Services;
+using BiliMusicDotNet.Tests.Support;
 using BiliMusicDotNet.ViewModels;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,6 +44,10 @@ internal static class HeadlessServices
         // 视图模型之间的消息通道；与生产注册保持一致，用进程级默认实现。
         services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
 
+        // 设置页：默认空设置集，视图测试可自行构造带数据的视图模型。
+        services.AddSingleton<ISettingService>(new FakeSettingService());
+        services.AddSingleton<SettingViewModel>();
+
         // 登录服务的替身：不落盘、不联网、状态恒为未登录。
         services.AddSingleton<IBiliLoginService>(loginService ?? new StubLoginService());
         services.AddSingleton<ICredentialService, CredentialService>();
@@ -55,6 +60,7 @@ internal static class HeadlessServices
         services.AddTransient<BiliMusicDotNet.Views.AboutPageView>();
         services.AddTransient<BiliMusicDotNet.Views.RecommendationPageView>();
         services.AddTransient<BiliMusicDotNet.Views.QrLoginView>();
+        services.AddTransient<BiliMusicDotNet.Views.SettingView>();
 
         return services.BuildServiceProvider();
     }

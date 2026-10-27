@@ -1,0 +1,147 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:BiliMusicDotNet.ViewModels"
+             xmlns:settings="clr-namespace:BiliMusicDotNet.Models.Settings"
+             xmlns:suki="clr-namespace:SukiUI.Controls;assembly=SukiUI"
+             xmlns:cheryl="clr-namespace:CherylUI.Controls;assembly=CherylUI"
+             xmlns:formFields="clr-namespace:CherylUI.Controls.FormFields;assembly=CherylUI"
+             xmlns:cherylUi="clr-namespace:CherylUI;assembly=CherylUI"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:DataType="vm:SettingViewModel"
+             x:Class="BiliMusicDotNet.Views.SettingView">
+
+    <UserControl.Resources>
+        <DataTemplate x:Key="DesktopSettingItemTemplate" x:DataType="settings:SettingItem">
+            <Border BorderBrush="#1A000000" BorderThickness="0,0,0,1" Padding="0,12">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Margin="0,0,12,0" Spacing="4">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Description}"
+                                   IsVisible="{Binding HasDescription}"
+                                   Opacity="0.65"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ToggleSwitch Grid.Column="1"
+                                  IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                  IsVisible="{Binding IsToggle}"
+                                  VerticalAlignment="Center" />
+
+                    <ComboBox Grid.Column="1"
+                              ItemsSource="{Binding OptionTitles}"
+                              SelectedItem="{Binding SelectedOptionTitle, Mode=TwoWay}"
+                              IsVisible="{Binding IsSingleChoice}"
+                              MinWidth="120"
+                              VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="AndroidSettingItemTemplate" x:DataType="settings:SettingItem">
+            <StackPanel>
+                <formFields:FormFieldSwitch Title="{Binding Title}"
+                                            IsChecked="{Binding BoolValue, Mode=TwoWay}"
+                                            IsVisible="{Binding IsToggle}" />
+
+                <formFields:FormFieldPicker Title="{Binding Title}"
+                                            DialogTitle="{Binding Title}"
+                                            DialogSubTitle="{Binding Description}"
+                                            Items="{Binding OptionTitles}"
+                                            SelectedItem="{Binding SelectedOptionTitle, Mode=TwoWay}"
+                                            IsVisible="{Binding IsSingleChoice}" />
+
+                <TextBlock Text="{Binding Description}"
+                           IsVisible="{Binding HasDescription}"
+                           Margin="0,0,0,8"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+
+                <cherylUi:HorizontalSeparator />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Panel>
+        <OnPlatform>
+            <On Options="Windows">
+                <Grid RowDefinitions="Auto,*" Margin="24,20">
+                    <Grid Grid.Row="0" ColumnDefinitions="Auto,*">
+                        <Button x:Name="DesktopBackButton"
+                                Classes="Flat Icon"
+                                Command="{Binding CloseCommand}"
+                                ToolTip.Tip="返回"
+                                Margin="0,0,12,0">
+                            <PathIcon Data="{StaticResource IconBack}" Width="20" Height="20" />
+                        </Button>
+
+                        <TextBlock Grid.Column="1"
+                                   Text="设置"
+                                   FontSize="24"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" Margin="0,16,0,0">
+                        <StackPanel Spacing="18">
+                            <ItemsControl ItemsSource="{Binding Sections}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="settings:SettingSectionGroup">
+                                        <suki:GroupBox Header="{Binding Title}" Margin="0,0,0,18">
+                                            <ItemsControl ItemsSource="{Binding Items}"
+                                                          ItemTemplate="{StaticResource DesktopSettingItemTemplate}" />
+                                        </suki:GroupBox>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="暂无可配置的设置项"
+                                       IsVisible="{Binding IsEmpty}"
+                                       HorizontalAlignment="Center"
+                                       Opacity="0.6"
+                                       Margin="0,24" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </On>
+
+            <On Options="Android">
+                <Grid>
+                    <cheryl:SliverPage Header="设置" IsBackVisible="False">
+                        <StackPanel Margin="0,20" Spacing="18">
+                            <ItemsControl ItemsSource="{Binding Sections}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="settings:SettingSectionGroup">
+                                        <cheryl:GroupBox Header="{Binding Title}" Margin="0,0,0,16">
+                                            <StackPanel Margin="10,2">
+                                                <ItemsControl ItemsSource="{Binding Items}"
+                                                              ItemTemplate="{StaticResource AndroidSettingItemTemplate}" />
+                                            </StackPanel>
+                                        </cheryl:GroupBox>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="暂无可配置的设置项"
+                                       IsVisible="{Binding IsEmpty}"
+                                       HorizontalAlignment="Center"
+                                       Opacity="0.6"
+                                       Margin="0,24" />
+                        </StackPanel>
+                    </cheryl:SliverPage>
+
+                    <Button x:Name="AndroidBackButton"
+                            Classes="Void"
+                            Command="{Binding CloseCommand}"
+                            Padding="23,40"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            ZIndex="1">
+                        <PathIcon Data="{StaticResource IconBack}" Width="20" Height="20" />
+                    </Button>
+                </Grid>
+            </On>
+        </OnPlatform>
+    </Panel>
+</UserControl>

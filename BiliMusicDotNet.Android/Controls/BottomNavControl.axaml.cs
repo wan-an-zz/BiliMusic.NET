@@ -45,12 +45,17 @@ public partial class BottomNavControl : UserControl
         AvaloniaProperty.Register<BottomNavControl, string>(
             nameof(NavControlBackgroundColor), "#FFFFFF");
 
-    /// <summary>当前选中项，只读。</summary>
+    /// <summary>当前选中项；不属于导航项集合的项按外部选中处理。</summary>
     public static readonly DirectProperty<BottomNavControl, NavItem?> SelectedItemProperty =
         AvaloniaProperty.RegisterDirect<BottomNavControl, NavItem?>(
-            nameof(SelectedItem), o => o.SelectedItem);
+            nameof(SelectedItem),
+            o => o.SelectedItem,
+            (o, value) => o.SelectedItem = value,
+            defaultBindingMode: BindingMode.TwoWay);
 
     private NavItem? _selectedItem;
+    private NavItem? _pendingSelectedItem;
+    private bool _hasExternalSelection;
 
     public BottomNavControl()
     {
@@ -91,25 +96,32 @@ public partial class BottomNavControl : UserControl
         set => SetValue(NavControlBackgroundColorProperty, value);
     }
 
-    /// <summary>当前选中项，只读；内容区渲染它的 <see cref="NavItem.Content"/>。</summary>
+    /// <summary>当前选中项，可写；不属于导航项集合的项按外部选中处理。</summary>
     public NavItem? SelectedItem
     {
         get => _selectedItem;
-        private set => SetAndRaise(SelectedItemProperty, ref _selectedItem, value);
+        set => SetSelectedItem(value);
     }
 
     /// <summary>模板内点击标签时调用的命令，参数为该导航项本身。</summary>
     public ICommand SelectItemCommand { get; }
 
-    /// <summary>供模板点击回调：把被点的导航项设为选中项。</summary>
+    /// <summary>供模板点击回调：把被点的导航项设为选中项，并清掉外部选中态。</summary>
     public void SelectItem(NavItem? item)
     {
         if (item is null)
             return;
 
         var index = IndexOf(item);
-        if (index >= 0)
-            SelectedIndex = index;
+        if (index < 0)
+            return;
+
+        _hasExternalSelection = false;
+        _pendingSelectedItem = null;
+        SelectedIndex = index;
+
+        if (SelectedIndex == index)
+            ApplyNormalSelection();
     }
 
     /// <inheritdoc />
@@ -125,10 +137,17 @@ public partial class BottomNavControl : UserControl
             if (TabItems is not null)
                 TabItems.ItemsSource = change.NewValue as ObservableCollection<NavItem>;
 
-            UpdateSelection();
+            ApplySelectionAfterItemsChanged();
         }
         else if (change.Property == SelectedIndexProperty)
         {
+            if (_hasExternalSelection)
+            {
+                UpdateSelection();
+                return;
+            }
+
+            CommitSelectedItem();
             UpdateSelection();
         }
     }
@@ -145,7 +164,7 @@ public partial class BottomNavControl : UserControl
             newValue.CollectionChanged += OnItemsChanged;
     }
 
-    private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e) => UpdateSelection();
+    private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e) => ApplySelectionAfterItemsChanged();
 
     private List<NavItem> FlattenItems()
     {
@@ -163,7 +182,7 @@ public partial class BottomNavControl : UserControl
     private int IndexOf(NavItem item)
     {
         var index = 0;
-        foreach (var candidate in ItemsResource)
+        foreach (var candidate in FlattenItems())
         {
             if (ReferenceEquals(candidate, item))
                 return index;
@@ -173,15 +192,128 @@ public partial class BottomNavControl : UserControl
         return -1;
     }
 
+    /// <summary>
+    /// 处理外部写入的选中项：命中导航项走正常选中，未命中则保留为外部项并清空高亮。
+    /// </summary>
+    private void SetSelectedItem(NavItem? value)
+    {
+        if (value is null)
+        {
+            SelectFirstAvailable();
+            return;
+        }
+
+        var index = IndexOf(value);
+        if (index >= 0)
+        {
+            SelectIndex(index);
+            return;
+        }
+
+        _pendingSelectedItem = FlattenItems().Count == 0 ? value : null;
+        _hasExternalSelection = true;
+        SetSelectedItemInternal(value);
+
+        if (SelectedIndex != -1)
+            SelectedIndex = -1;
+
+        UpdateSelection();
+    }
+
+    private void SetSelectedItemInternal(NavItem? value)
+        => SetAndRaise(SelectedItemProperty, ref _selectedItem, value);
+
+    private void SelectIndex(int index)
+    {
+        _hasExternalSelection = false;
+        _pendingSelectedItem = null;
+        SelectedIndex = index;
+
+        if (SelectedIndex == index)
+            ApplyNormalSelection();
+    }
+
+    private void SelectFirstAvailable()
+    {
+        _pendingSelectedItem = null;
+        _hasExternalSelection = false;
+
+        if (FlattenItems().Count == 0)
+        {
+            SelectedIndex = 0;
+            SetSelectedItemInternal(null);
+            UpdateSelection();
+            return;
+        }
+
+        SelectIndex(0);
+    }
+
+    private void ApplyNormalSelection()
+    {
+        CommitSelectedItem();
+        UpdateSelection();
+    }
+
+    /// <summary>集合换掉或增删后，先应用 pending 外部项，再保留已有外部项或走正常首项。</summary>
+    private void ApplySelectionAfterItemsChanged()
+    {
+        if (_pendingSelectedItem is { } pending)
+        {
+            _pendingSelectedItem = null;
+            _hasExternalSelection = false;
+
+            var index = IndexOf(pending);
+            if (index >= 0)
+            {
+                SelectIndex(index);
+                return;
+            }
+
+            _hasExternalSelection = true;
+            SetSelectedItemInternal(pending);
+            SelectedIndex = -1;
+            UpdateSelection();
+            return;
+        }
+
+        if (_hasExternalSelection)
+        {
+            UpdateSelection();
+            return;
+        }
+
+        CommitSelectedItem();
+        UpdateSelection();
+    }
+
+    private void CommitSelectedItem()
+    {
+        if (_hasExternalSelection)
+            return;
+
+        var items = FlattenItems();
+        var selected = SelectedIndex;
+
+        SetSelectedItemInternal(selected >= 0 && selected < items.Count ? items[selected] : null);
+    }
+
     private void UpdateSelection()
     {
         var items = FlattenItems();
+
+        if (_hasExternalSelection)
+        {
+            foreach (var item in items)
+                item.IsSelected = false;
+            return;
+        }
+
         var selected = SelectedIndex;
-        var selectedItem = selected >= 0 && selected < items.Count ? items[selected] : null;
 
         for (var i = 0; i < items.Count; i++)
             items[i].IsSelected = i == selected;
 
-        SelectedItem = selectedItem;
+        SetSelectedItemInternal(selected >= 0 && selected < items.Count ? items[selected] : null);
     }
 }

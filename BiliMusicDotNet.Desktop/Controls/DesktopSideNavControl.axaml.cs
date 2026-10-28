@@ -57,15 +57,20 @@ public partial class DesktopSideNavControl : UserControl
             nameof(SelectedIndex), 0,
             defaultBindingMode: BindingMode.TwoWay);
 
-    /// <summary>当前选中项，只读。</summary>
+    /// <summary>当前选中项，可写；不属于导航项集合的项按外部选中处理。</summary>
     public static readonly DirectProperty<DesktopSideNavControl, NavItem?> SelectedItemProperty =
         AvaloniaProperty.RegisterDirect<DesktopSideNavControl, NavItem?>(
-            nameof(SelectedItem), o => o.SelectedItem);
+            nameof(SelectedItem),
+            o => o.SelectedItem,
+            (o, value) => o.SelectedItem = value,
+            defaultBindingMode: BindingMode.TwoWay);
 
     private readonly ObservableCollection<NavItem> _groupBItems = new();
     private readonly ObservableCollection<NavItem> _groupAItems = new();
     private readonly Dictionary<int, double> _indicatorOffsets = new();
     private NavItem? _selectedItem;
+    private NavItem? _pendingSelectedItem;
+    private bool _hasExternalSelection;
     private CancellationTokenSource? _animationCts;
     private double _lastHeight;
 
@@ -106,11 +111,11 @@ public partial class DesktopSideNavControl : UserControl
         set => SetValue(SelectedIndexProperty, value);
     }
 
-    /// <summary>当前选中项，只读；右侧内容区渲染它的 <see cref="NavItem.Content"/>。</summary>
+    /// <summary>当前选中项，可写；不属于导航项集合的项按外部选中处理。</summary>
     public NavItem? SelectedItem
     {
         get => _selectedItem;
-        private set => SetAndRaise(SelectedItemProperty, ref _selectedItem, value);
+        set => SetSelectedItem(value);
     }
 
     /// <summary>模板内点击导航项时调用的命令，参数为该导航项本身。</summary>
@@ -134,15 +139,23 @@ public partial class DesktopSideNavControl : UserControl
         _groupAItems,
     };
 
-    /// <summary>供模板点击回调：把被点的导航项设为选中项。</summary>
+    /// <summary>供模板点击回调：把被点的导航项设为选中项，并清掉外部选中态。</summary>
     public void SelectItem(NavItem? item)
     {
         if (item is null)
             return;
 
         var index = IndexOf(item);
-        if (index >= 0)
-            SelectedIndex = index;
+        if (index < 0)
+            return;
+
+        _hasExternalSelection = false;
+        _pendingSelectedItem = null;
+        var previousIndex = SelectedIndex;
+        SelectedIndex = index;
+
+        if (previousIndex == index || previousIndex < 0)
+            ApplyNormalSelection();
     }
 
     /// <inheritdoc />
@@ -158,11 +171,19 @@ public partial class DesktopSideNavControl : UserControl
         {
             Resubscribe(change.OldValue as ObservableCollection<NavItem>, change.NewValue as ObservableCollection<NavItem>);
             Repartition();
-            CommitSelectedItem();
+            ApplySelectionAfterItemsChanged();
             ResetIndicatorToSelection();
         }
         else if (change.Property == SelectedIndexProperty)
         {
+            if (_hasExternalSelection)
+            {
+                ApplyExternalSelectionState();
+                return;
+            }
+
+            Indicator.Opacity = 1;
+
             var oldIndex = change.OldValue is int old ? old : 0;
             var newIndex = change.NewValue is int current ? current : 0;
 
@@ -179,6 +200,11 @@ public partial class DesktopSideNavControl : UserControl
             else if (_indicatorOffsets.TryGetValue(newIndex, out var offset))
             {
                 SetIndicatorPosition(offset);
+                UpdateSelection();
+            }
+            else
+            {
+                UpdateSelection();
             }
         }
         else if (change.Property == ItemTemplateProperty)
@@ -202,6 +228,7 @@ public partial class DesktopSideNavControl : UserControl
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         Repartition();
+        ApplySelectionAfterItemsChanged();
         ResetIndicatorToSelection();
     }
 
@@ -218,8 +245,6 @@ public partial class DesktopSideNavControl : UserControl
             else
                 _groupBItems.Add(item);
         }
-
-        UpdateSelection();
     }
 
     /// <summary>把导航项按源顺序摊平，便于按下标取值。</summary>
@@ -256,14 +281,144 @@ public partial class DesktopSideNavControl : UserControl
     }
 
     /// <summary>
+    /// 处理外部写入的选中项：命中导航项走正常选中，未命中则保留为外部项并清空高亮。
+    /// </summary>
+    private void SetSelectedItem(NavItem? value)
+    {
+        if (value is null)
+        {
+            SelectFirstAvailable();
+            return;
+        }
+
+        var index = IndexOf(value);
+
+        // 构造期 ItemsResource 可能尚未分区；先补一次，再按全局索引判断。
+        if (index < 0 && FlattenItems().Count > 0 && _groupBItems.Count == 0 && _groupAItems.Count == 0)
+        {
+            Repartition();
+            index = IndexOf(value);
+        }
+
+        if (index >= 0)
+        {
+            SelectIndex(index);
+            return;
+        }
+
+        _pendingSelectedItem = FlattenItems().Count == 0 ? value : null;
+        _hasExternalSelection = true;
+        SetSelectedItemInternal(value);
+
+        if (SelectedIndex != -1)
+            SelectedIndex = -1;
+
+        ApplyExternalSelectionState();
+    }
+
+    private void SetSelectedItemInternal(NavItem? value)
+        => SetAndRaise(SelectedItemProperty, ref _selectedItem, value);
+
+    private void SelectIndex(int index)
+    {
+        _hasExternalSelection = false;
+        _pendingSelectedItem = null;
+        var previousIndex = SelectedIndex;
+        SelectedIndex = index;
+
+        if (previousIndex == index || previousIndex < 0)
+            ApplyNormalSelection();
+    }
+
+    private void SelectFirstAvailable()
+    {
+        _pendingSelectedItem = null;
+        _hasExternalSelection = false;
+
+        if (FlattenItems().Count == 0)
+        {
+            SelectedIndex = 0;
+            SetSelectedItemInternal(null);
+            UpdateSelection();
+            HideIndicator();
+            return;
+        }
+
+        SelectIndex(0);
+    }
+
+    private void ApplyNormalSelection()
+    {
+        CommitSelectedItem();
+        UpdateSelection();
+
+        if (Indicator is null)
+            return;
+
+        if (_indicatorOffsets.TryGetValue(SelectedIndex, out var offset))
+        {
+            Indicator.Opacity = 1;
+            SetIndicatorPosition(offset);
+        }
+    }
+
+    /// <summary>集合换掉或增删后，先应用 pending 外部项，再保留已有外部项或走正常首项。</summary>
+    private void ApplySelectionAfterItemsChanged()
+    {
+        if (_pendingSelectedItem is { } pending)
+        {
+            _pendingSelectedItem = null;
+            _hasExternalSelection = false;
+
+            var index = IndexOf(pending);
+            if (index >= 0)
+            {
+                SelectIndex(index);
+                return;
+            }
+
+            _hasExternalSelection = true;
+            SetSelectedItemInternal(pending);
+            SelectedIndex = -1;
+            ApplyExternalSelectionState();
+            return;
+        }
+
+        if (_hasExternalSelection)
+        {
+            ApplyExternalSelectionState();
+            return;
+        }
+
+        CommitSelectedItem();
+        UpdateSelection();
+    }
+
+    private void ApplyExternalSelectionState()
+    {
+        _animationCts?.Cancel();
+        UpdateSelection();
+        HideIndicator();
+    }
+
+    private void HideIndicator()
+    {
+        if (Indicator is not null)
+            Indicator.Opacity = 0;
+    }
+
+    /// <summary>
     /// 仅提交当前选中项（决定右侧渲染哪个视图）。点击瞬间即调用，不等动画。
     /// </summary>
     private void CommitSelectedItem()
     {
+        if (_hasExternalSelection)
+            return;
+
         var flat = FlattenSections();
         var selected = SelectedIndex;
 
-        SelectedItem = selected >= 0 && selected < flat.Count ? flat[selected] : null;
+        SetSelectedItemInternal(selected >= 0 && selected < flat.Count ? flat[selected] : null);
     }
 
     /// <summary>
@@ -272,6 +427,14 @@ public partial class DesktopSideNavControl : UserControl
     private void UpdateSelection()
     {
         var flat = FlattenSections();
+
+        if (_hasExternalSelection)
+        {
+            foreach (var item in flat)
+                item.IsSelected = false;
+            return;
+        }
+
         var selected = SelectedIndex;
 
         for (var i = 0; i < flat.Count; i++)
@@ -295,12 +458,24 @@ public partial class DesktopSideNavControl : UserControl
         _animationCts?.Cancel();
 
         _indicatorOffsets.Clear();
+
+        if (_hasExternalSelection)
+        {
+            UpdateSelection();
+            HideIndicator();
+            return;
+        }
+
         CalculateIndicatorPositions();
         UpdateSelection();
         if (_indicatorOffsets.TryGetValue(SelectedIndex, out var offset))
         {
             Indicator.Opacity = 1;
             SetIndicatorPosition(offset);
+        }
+        else
+        {
+            HideIndicator();
         }
     }
 
@@ -417,6 +592,12 @@ public partial class DesktopSideNavControl : UserControl
 
     private void OnLayoutUpdated(object? sender, EventArgs e)
     {
+        if (_hasExternalSelection)
+        {
+            HideIndicator();
+            return;
+        }
+
         var isFirstLayout = _lastHeight == 0 && Bounds.Height > 0;
         var heightChanged = Math.Abs(Bounds.Height - _lastHeight) > 1;
         if (isFirstLayout || heightChanged)
@@ -424,7 +605,10 @@ public partial class DesktopSideNavControl : UserControl
             _lastHeight = Bounds.Height;
             CalculateIndicatorPositions();
             if (_indicatorOffsets.TryGetValue(SelectedIndex, out var offset))
+            {
+                Indicator.Opacity = 1;
                 SetIndicatorPosition(offset);
+            }
         }
     }
 

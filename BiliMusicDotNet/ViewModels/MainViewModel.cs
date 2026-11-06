@@ -114,6 +114,7 @@ public partial class MainViewModel : ViewModelBase
         {
             IsSettingsOpen = false;
             _previousNavItem = null;
+            _logger.LogInformation("设置页已关闭");
         }
     }
 

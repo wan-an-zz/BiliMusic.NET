@@ -88,7 +88,7 @@ public sealed class SettingViewTests
         var back = view.GetVisualDescendants().OfType<Button>()
             .Single(button => button.Name == "DesktopBackButton");
         var raised = 0;
-        viewModel.CloseRequested += (_, _) => raised++;
+        viewModel.CloseSettingViewRequested += (_, _) => raised++;
 
         back.Command!.Execute(null);
 

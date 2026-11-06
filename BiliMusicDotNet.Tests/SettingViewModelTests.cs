@@ -60,7 +60,7 @@ public sealed class SettingViewModelTests
     {
         var viewModel = new SettingViewModel(new FakeSettingService());
         var raised = 0;
-        viewModel.CloseRequested += (_, _) => raised++;
+        viewModel.CloseSettingViewRequested += (_, _) => raised++;
 
         viewModel.CloseCommand.Execute(null);
 

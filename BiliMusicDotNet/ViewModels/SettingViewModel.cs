@@ -44,11 +44,11 @@ public sealed partial class SettingViewModel : ViewModelBase
     public bool IsEmpty => !HasSettings;
 
     /// <summary>用户请求关闭设置页；由主视图模型负责切回上一页。</summary>
-    public event EventHandler? CloseRequested;
+    public event EventHandler? CloseSettingViewRequested;
 
     /// <summary>请求关闭设置页。</summary>
     [RelayCommand]
-    private void Close() => CloseRequested?.Invoke(this, EventArgs.Empty);
+    private void Close() => CloseSettingViewRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnSettingItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

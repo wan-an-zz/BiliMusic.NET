@@ -27,7 +27,7 @@ public static class ServiceCollectionExtensions
         // ViewModels
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<SettingViewModel>();
-        services.AddTransient<AboutPageViewModel>();
+        services.AddSingleton<AboutPageViewModel>();
         services.AddTransient<RecommendationPageViewModel>();
 
         // Views

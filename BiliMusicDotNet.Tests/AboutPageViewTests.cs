@@ -197,4 +197,33 @@ public class AboutPageViewTests
         // 宿主会为了关闭动画把内容多留 500ms，所以断言"收到了收起事件"而不是"内容已消失"。
         Assert.Equal(1, dismissed);
     }
+
+    [AvaloniaFact]
+    public async Task 设置入口行存在并绑定OpenSettingsCommand()
+    {
+        var model = NewModel(out _);
+        var view = new AboutPageView { DataContext = model };
+        await MountAsync(view);
+
+        var row = view.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.Classes.Contains("about-option"));
+
+        Assert.Same(model.OpenSettingsCommand, row.Command);
+    }
+
+    [AvaloniaFact]
+    public async Task 点击设置入口触发OpenSettingsRequested()
+    {
+        var model = NewModel(out _);
+        var view = new AboutPageView { DataContext = model };
+        await MountAsync(view);
+        var row = view.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.Classes.Contains("about-option"));
+
+        var raised = 0;
+        model.OpenSettingsRequested += (_, _) => raised++;
+        row.Command!.Execute(null);
+
+        Assert.Equal(1, raised);
+    }
 }

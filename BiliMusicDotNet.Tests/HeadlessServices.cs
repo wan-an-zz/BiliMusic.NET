@@ -55,7 +55,7 @@ internal static class HeadlessServices
         services.AddSingleton<IEncryptService, DpapiEncryptService>();
 
         services.AddSingleton<MainViewModel>();
-        services.AddTransient<AboutPageViewModel>();
+        services.AddSingleton<AboutPageViewModel>();
         services.AddTransient<RecommendationPageViewModel>();
         services.AddTransient<BiliMusicDotNet.Views.AboutPageView>();
         services.AddTransient<BiliMusicDotNet.Views.RecommendationPageView>();

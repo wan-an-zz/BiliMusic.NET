@@ -10,6 +10,7 @@ using BiliMusicDotNet.Models.Exceptions;
 using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.ViewModels.Messages;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -80,6 +81,13 @@ public sealed partial class AboutPageViewModel : ViewModelBase
 
     /// <summary>已登录时悬停提示的操作。</summary>
     public const string LogoutActionText = "退出登录";
+
+    /// <summary>用户请求打开设置页；由 <see cref="MainViewModel"/> 负责切换导航项。</summary>
+    public event EventHandler? OpenSettingsRequested;
+
+    /// <summary>打开设置页。</summary>
+    [RelayCommand]
+    private void OpenSettings() => OpenSettingsRequested?.Invoke(this, EventArgs.Empty);
 
     /// <summary>头像被点击：未登录去登录，已登录弹二次确认后登出。</summary>
     public void OnAvatarPointerPressed()

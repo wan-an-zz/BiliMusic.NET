@@ -9,6 +9,52 @@
              x:DataType="vm:AboutPageViewModel"
              x:Class="BiliMusicDotNet.Views.AboutPageView">
 
+    <UserControl.Resources>
+        <!--
+            跳转选项行：本地 Theme + 本地 Template 双保险。
+            SukiUI 的隐式按钮主题会提供 Template，任一路径被覆盖时另一条仍然生效。
+        -->
+        <ControlTemplate x:Key="AboutOptionRowTemplate" TargetType="Button">
+            <Border Name="RowBackground"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="8"
+                    RenderTransformOrigin="50%,50%"
+                    Padding="{TemplateBinding Padding}">
+                <Border.Transitions>
+                    <Transitions>
+                        <BrushTransition Property="Background" Duration="0:0:0.12"/>
+                        <TransformOperationsTransition Property="RenderTransform"
+                                                       Duration="0:0:0.12"
+                                                       Easing="CubicEaseOut"/>
+                    </Transitions>
+                </Border.Transitions>
+
+                <ContentPresenter Content="{TemplateBinding Content}"
+                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                  HorizontalContentAlignment="Stretch"
+                                  VerticalContentAlignment="Center" />
+            </Border>
+        </ControlTemplate>
+
+        <ControlTheme x:Key="AboutOptionTheme" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="8,10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template" Value="{StaticResource AboutOptionRowTemplate}"/>
+
+            <Style Selector="^:pointerover /template/ Border#RowBackground">
+                <Setter Property="Background" Value="#0A000000"/>
+            </Style>
+            <Style Selector="^:pressed /template/ Border#RowBackground">
+                <Setter Property="Background" Value="#16000000"/>
+                <Setter Property="RenderTransform" Value="scale(0.985)"/>
+            </Style>
+        </ControlTheme>
+    </UserControl.Resources>
+
     <UserControl.Styles>
         <!-- 悬停时图标变淡。 -->
         <Style Selector="Image.avatar-image">
@@ -32,49 +78,90 @@
         <Style Selector="Panel#AvatarHost:pointerover Border.avatar-overlay">
             <Setter Property="IsVisible" Value="True"/>
         </Style>
+
+        <Style Selector="PathIcon.about-option-chevron">
+            <Setter Property="Opacity" Value="0.45"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform"
+                                                   Duration="0:0:0.12"
+                                                   Easing="CubicEaseOut"/>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.12"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button.about-option:pointerover PathIcon.about-option-chevron">
+            <Setter Property="Opacity" Value="0.8"/>
+            <Setter Property="RenderTransform" Value="translate(2px,0)"/>
+        </Style>
     </UserControl.Styles>
 
     <Panel>
         <ScrollViewer>
-            <Grid Margin="16,40" RowDefinitions="*, Auto">
-                <StackPanel Grid.Row="0" HorizontalAlignment="Stretch" Spacing="20">
-                    <!-- 圆形图标：未登录是应用图标，已登录是头像；悬停变灰并提示可执行的动作。 -->
-                    <Panel x:Name="AvatarHost"
-                           Width="150" Height="150"
+            <StackPanel Margin="16,40" Spacing="20">
+                <!-- 圆形图标：未登录是应用图标，已登录是头像；悬停变灰并提示可执行的动作。 -->
+                <Panel x:Name="AvatarHost"
+                       Width="150" Height="150"
+                       HorizontalAlignment="Center"
+                       Cursor="Hand"
+                       PointerPressed="OnAvatarPointerPressed">
+                    <Border CornerRadius="75" ClipToBounds="True" Background="#0F000000">
+                        <Image Classes="avatar-image"
+                               Source="{Binding HeadPhoto}"
+                               Stretch="UniformToFill"
+                               RenderOptions.BitmapInterpolationMode="HighQuality" />
+                    </Border>
+
+                    <!-- 只在悬停时可见；具体可见性由上面的样式按 :pointerover 控制。 -->
+                    <Border Classes="avatar-overlay"
+                            CornerRadius="75"
+                            Background="#60949292">
+                        <TextBlock Text="{Binding AvatarActionText}"
+                                   Foreground="White"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                </Panel>
+
+                <TextBlock Text="{Binding UserName}"
                            HorizontalAlignment="Center"
-                           Cursor="Hand"
-                           PointerPressed="OnAvatarPointerPressed">
-                        <Border CornerRadius="75" ClipToBounds="True" Background="#0F000000">
-                            <Image Classes="avatar-image"
-                                   Source="{Binding HeadPhoto}"
-                                   Stretch="UniformToFill"
-                                   RenderOptions.BitmapInterpolationMode="HighQuality" />
-                        </Border>
+                           FontSize="24"
+                           Margin="0, 7"
+                           FontWeight="SemiBold" />
 
-                        <!-- 只在悬停时可见；具体可见性由上面的样式按 :pointerover 控制。 -->
-                        <Border Classes="avatar-overlay"
-                                CornerRadius="75"
-                                Background="#60949292">
-                            <TextBlock Text="{Binding AvatarActionText}"
-                                       Foreground="White"
-                                       FontSize="15"
+                <Border x:Name="Divider" Height="2" Margin="10,8" Background="#22000000" HorizontalAlignment="Stretch"/>
+
+                <!-- 选项列表 : 统一使用 SemiBold，FontSize统一设 16.50-->
+                <StackPanel x:Name="AboutOptions" Spacing="2" Margin="10,0">
+                    <Button x:Name="SettingsOptionButton"
+                            Classes="about-option"
+                            Theme="{StaticResource AboutOptionTheme}"
+                            
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            AutomationProperties.Name="设置"
+                            Command="{Binding OpenSettingsCommand}">
+                        <Grid ColumnDefinitions="Auto,*,Auto" MinHeight="32" VerticalAlignment="Center">
+                            <PathIcon Data="{StaticResource IconSettings}"
+                                      Width="20" Height="20"
+                                      VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1"
+                                       Text="设置"
+                                       FontSize="16.50"
+                                       Margin="12,0"
                                        FontWeight="SemiBold"
-                                       HorizontalAlignment="Center"
                                        VerticalAlignment="Center" />
-                        </Border>
-                    </Panel>
-
-                    <TextBlock Text="{Binding UserName}"
-                               HorizontalAlignment="Center"
-                               FontSize="24"
-                               Margin="0, 7"
-                               FontWeight="SemiBold" />
-
-                    <Border x:Name="Divider" Height="2" Margin="10,8" Background="#22000000" HorizontalAlignment="Stretch"/>
+                            <PathIcon Grid.Column="2"
+                                      Classes="about-option-chevron"
+                                      Data="{StaticResource IconChevronRight}"
+                                      Width="18" Height="18"
+                                      VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
                 </StackPanel>
-
-                <!-- 其它信息区由后续任务实现，此处留空。 -->
-            </Grid>
+            </StackPanel>
         </ScrollViewer>
 
         <OnPlatform>

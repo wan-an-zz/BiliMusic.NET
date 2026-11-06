@@ -29,7 +29,7 @@ namespace BiliMusicDotNet.Desktop.Controls;
 public partial class DesktopSideNavControl : UserControl
 {
     /// <summary>指示器淡出 / 淡入的等待时长。</summary>
-    private const int FadePhaseDelayMs = 220;
+    private const int FadePhaseDelayMs = 200;
 
     /// <summary>指示器平移的过渡时长。</summary>
     private const int TranslateDurationMs = 220;
@@ -154,7 +154,7 @@ public partial class DesktopSideNavControl : UserControl
         var previousIndex = SelectedIndex;
         SelectedIndex = index;
 
-        if (previousIndex == index || previousIndex < 0)
+        if (previousIndex == index)
             ApplyNormalSelection();
     }
 
@@ -182,8 +182,6 @@ public partial class DesktopSideNavControl : UserControl
                 return;
             }
 
-            Indicator.Opacity = 1;
-
             var oldIndex = change.OldValue is int old ? old : 0;
             var newIndex = change.NewValue is int current ? current : 0;
 
@@ -199,6 +197,7 @@ public partial class DesktopSideNavControl : UserControl
             }
             else if (_indicatorOffsets.TryGetValue(newIndex, out var offset))
             {
+                Indicator.Opacity = 1;
                 SetIndicatorPosition(offset);
                 UpdateSelection();
             }
@@ -285,6 +284,10 @@ public partial class DesktopSideNavControl : UserControl
     /// </summary>
     private void SetSelectedItem(NavItem? value)
     {
+        // 双向绑定会把内部提交的选中项原样回写；同值直接返回，避免打断进行中的指示器动画。
+        if (ReferenceEquals(_selectedItem, value) && value is not null)
+            return;
+
         if (value is null)
         {
             SelectFirstAvailable();
@@ -326,7 +329,7 @@ public partial class DesktopSideNavControl : UserControl
         var previousIndex = SelectedIndex;
         SelectedIndex = index;
 
-        if (previousIndex == index || previousIndex < 0)
+        if (previousIndex == index)
             ApplyNormalSelection();
     }
 
@@ -612,8 +615,19 @@ public partial class DesktopSideNavControl : UserControl
         }
     }
 
-    private void SetIndicatorPosition(double y)
+    private void SetIndicatorPosition(double y, bool animate = true)
     {
+        if (!animate)
+        {
+            // 从外部选中项回到导航项时不产生跨项平移：临时移除过渡，直接落位。
+            var transitions = Indicator.Transitions;
+            Indicator.Transitions = null;
+            Indicator.Margin = new Thickness(0, y, 0, 0);
+            Indicator.InvalidateArrange();
+            Indicator.Transitions = transitions;
+            return;
+        }
+
         Indicator.Margin = new Thickness(0, y, 0, 0);
         Indicator.InvalidateArrange();
     }
@@ -627,7 +641,7 @@ public partial class DesktopSideNavControl : UserControl
         }
 
         var items = FlattenSections();
-        if (oldIndex < 0 || newIndex < 0 || oldIndex >= items.Count || newIndex >= items.Count)
+        if (newIndex < 0 || newIndex >= items.Count)
         {
             UpdateSelection();
             return;
@@ -636,8 +650,23 @@ public partial class DesktopSideNavControl : UserControl
         // 先取消在途动画，避免它的延迟补色覆盖本次结果。
         _animationCts?.Cancel();
 
+        // 从设置页等外部选中项返回：指示器原本已隐藏，直接落位显示，避免掠过中间项。
+        if (oldIndex < 0)
+        {
+            SetIndicatorPosition(newOffset, animate: false);
+            Indicator.Opacity = 1;
+            UpdateSelection();
+            return;
+        }
+
+        if (oldIndex >= items.Count)
+        {
+            UpdateSelection();
+            return;
+        }
+
         // 指示器要移走了：旧图标立刻恢复未选中色。
-        DeselectItem(oldIndex < items.Count ? items[oldIndex] : null);
+        DeselectItem(items[oldIndex]);
 
         // B 组内部一律平移；只要一端是 A 组（底部段）就换成淡出淡入，避免指示器长距离掠过中间项。
         var involvesGroupA = items[oldIndex].Group == NavGroup.A || items[newIndex].Group == NavGroup.A;

@@ -10,7 +10,8 @@
              x:Class="BiliMusicDotNet.Android.Views.AndroidMainView">
     
     <cheryl:InteractiveContainer>
-        <ac:BottomNavControl ItemsResource="{Binding AllViews}"/>
+        <ac:BottomNavControl ItemsResource="{Binding AllViews}"
+                             SelectedItem="{Binding SelectedNavItem, Mode=TwoWay}"/>
     </cheryl:InteractiveContainer>
     
 </UserControl>

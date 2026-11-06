@@ -197,6 +197,10 @@ public partial class BottomNavControl : UserControl
     /// </summary>
     private void SetSelectedItem(NavItem? value)
     {
+        // 双向绑定会把内部提交的选中项原样回写；同值直接返回，避免重复提交。
+        if (ReferenceEquals(_selectedItem, value) && value is not null)
+            return;
+
         if (value is null)
         {
             SelectFirstAvailable();

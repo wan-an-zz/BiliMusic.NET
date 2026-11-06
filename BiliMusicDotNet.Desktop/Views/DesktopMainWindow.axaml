@@ -49,6 +49,9 @@
             <Style Selector="Button.win-btn:pointerover">
                 <Setter Property="Opacity" Value="1"/>
             </Style>
+            <Style Selector="Button.win-btn.active">
+                <Setter Property="Opacity" Value="1"/>
+            </Style>
             <Style Selector="Button.win-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
                 <Setter Property="Background" Value="#14000000"/>
             </Style>
@@ -72,7 +75,8 @@
 
             <dc:DesktopSideNavControl x:Name="SideNav" 
                                       VerticalAlignment="Stretch" 
-                                      ItemsResource="{Binding AllViews}"/>
+                                      ItemsResource="{Binding AllViews}"
+                                      SelectedItem="{Binding SelectedNavItem, Mode=TwoWay}"/>
 
             <!-- 自实现标题栏 -->
             <Panel x:Name="TitleBarChrome"
@@ -90,6 +94,16 @@
                             VerticalAlignment="Center"
                             Margin="0,0,6,0"
                             Spacing="2">
+                    <Button Classes="win-btn"
+                            Classes.active="{Binding IsSettingsOpen}"
+                            Command="{Binding ToggleSettingsCommand}"
+                            ToolTip.Tip="设置"
+                            CornerRadius="5">
+                        <PathIcon Data="{StaticResource IconSettings}"
+                                  Width="16" Height="16"
+                                  Foreground="#3C3C43"
+                                  Margin="3"/>
+                    </Button>
                     <Button Classes="win-btn" Click="OnMinimizeClick" ToolTip.Tip="最小化" CornerRadius="5">
                         <PathIcon Data="M5 16H19V18H5V16Z"
                                   Width="16" Height="16"

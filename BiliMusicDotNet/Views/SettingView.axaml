@@ -63,13 +63,39 @@
         </DataTemplate>
     </UserControl.Resources>
 
+    <UserControl.Styles>
+        <!-- 返回按钮只保留图标，不显示色块或边框。 -->
+        <Style Selector="Button.setting-back">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.setting-back:pointerover /template/ Border#RootBorder">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Button.setting-back:pressed /template/ Border#RootBorder">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </UserControl.Styles>
+
     <Panel>
         <OnPlatform>
             <On Options="Windows">
-                <Grid RowDefinitions="Auto,*" Margin="24,20">
+                <Grid RowDefinitions="Auto,*" Margin="24,56,24,20">
                     <Grid Grid.Row="0" ColumnDefinitions="Auto,*">
                         <Button x:Name="DesktopBackButton"
-                                Classes="Flat Icon"
+                                Classes="setting-back"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                Padding="0"
                                 Command="{Binding CloseCommand}"
                                 ToolTip.Tip="返回"
                                 Margin="0,0,12,0">

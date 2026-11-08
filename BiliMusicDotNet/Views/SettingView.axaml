@@ -18,10 +18,11 @@
             <Border BorderBrush="#1A000000" BorderThickness="0,0,0,1" Padding="0,12">
                 <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Margin="0,0,12,0" Spacing="4">
-                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="16"/>
                         <TextBlock Text="{Binding Description}"
                                    IsVisible="{Binding HasDescription}"
                                    Opacity="0.65"
+                                   FontSize="13"
                                    TextWrapping="Wrap" />
                     </StackPanel>
 
@@ -55,9 +56,10 @@
 
                 <TextBlock Text="{Binding Description}"
                            IsVisible="{Binding HasDescription}"
-                           Margin="0,0,0,8"
+                           Margin="0,0,0,5"
                            Opacity="0.6"
-                           TextWrapping="Wrap" />
+                           TextWrapping="Wrap"
+                           FontSize="12"/>
 
                 <cherylUi:HorizontalSeparator />
             </StackPanel>
@@ -98,7 +100,6 @@
                                 BorderThickness="0"
                                 Padding="0"
                                 Command="{Binding CloseCommand}"
-                                ToolTip.Tip="返回"
                                 Margin="0,0,12,0">
                             <PathIcon Data="{StaticResource IconBack}" Width="20" Height="20" />
                         </Button>
@@ -115,10 +116,12 @@
                             <ItemsControl ItemsSource="{Binding Sections}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="settings:SettingSectionGroup">
-                                        <suki:GroupBox Header="{Binding Title}" Margin="0,0,0,18">
-                                            <ItemsControl ItemsSource="{Binding Items}"
-                                                          ItemTemplate="{StaticResource DesktopSettingItemTemplate}" />
-                                        </suki:GroupBox>
+                                        <suki:GlassCard Margin="5, 10">
+                                            <suki:GroupBox Header="{Binding Title}" Margin="0,0,0,10" FontWeight="SemiBold" >
+                                                <ItemsControl ItemsSource="{Binding Items}"
+                                                              ItemTemplate="{StaticResource DesktopSettingItemTemplate}" />
+                                            </suki:GroupBox>
+                                        </suki:GlassCard>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -136,7 +139,8 @@
             <On Options="Android">
                 <controls:SettingSliverPage Header="设置"
                                             IsBackVisible="True"
-                                            BackCommand="{Binding CloseCommand}">
+                                            BackCommand="{Binding CloseCommand}"
+                                            FontWeight="SemiBold">
                     <StackPanel Margin="0,20" Spacing="18">
                         <ItemsControl ItemsSource="{Binding Sections}">
                             <ItemsControl.ItemTemplate>

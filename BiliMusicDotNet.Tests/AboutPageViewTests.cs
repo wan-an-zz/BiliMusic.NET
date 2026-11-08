@@ -4,6 +4,8 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Markup.Xaml.Styling;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 using BiliMusicDotNet.Models.Login;
 using BiliMusicDotNet.Tests.Support;
@@ -209,6 +211,36 @@ public class AboutPageViewTests
             .Single(button => button.Classes.Contains("about-option"));
 
         Assert.Same(model.OpenSettingsCommand, row.Command);
+    }
+
+    [AvaloniaFact]
+    public async Task 设置入口在CherylUI主题下仍保持透明背景()
+    {
+        var model = NewModel(out _);
+        var view = new AboutPageView { DataContext = model };
+        var window = new Window
+        {
+            Width = 800,
+            Height = 600,
+            Content = view,
+        };
+
+        window.Styles.Add(new StyleInclude(new Uri("avares://BiliMusicDotNet/"))
+        {
+            Source = new Uri("avares://CherylUI/Index.axaml"),
+        });
+
+        window.Show();
+        window.Measure(new Size(window.Width, window.Height));
+        window.Arrange(new Rect(0, 0, window.Width, window.Height));
+        await Task.Yield();
+
+        var row = view.GetVisualDescendants().OfType<Button>()
+            .Single(button => button.Classes.Contains("about-option"));
+
+        Assert.True(
+            row.Background is ISolidColorBrush { Color.A: 0 },
+            $"背景应为透明，实际为 {row.Background}");
     }
 
     [AvaloniaFact]

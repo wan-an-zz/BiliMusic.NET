@@ -79,6 +79,23 @@
             <Setter Property="IsVisible" Value="True"/>
         </Style>
 
+        <!--
+            CherylUI 的隐式 Button 样式把背景设成 Accent，优先级高于 ControlTheme；
+            局部样式在应用样式之后应用，才能覆盖 Android 上的蓝色胶囊。
+        -->
+        <Style Selector="Button.about-option">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="8,10"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template" Value="{StaticResource AboutOptionRowTemplate}"/>
+        </Style>
+        <Style Selector="Button.about-option:pointerover, Button.about-option:pressed">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
         <Style Selector="PathIcon.about-option-chevron">
             <Setter Property="Opacity" Value="0.45"/>
             <Setter Property="Transitions">
@@ -146,17 +163,20 @@
                         <Grid ColumnDefinitions="Auto,*,Auto" MinHeight="32" VerticalAlignment="Center">
                             <PathIcon Data="{StaticResource IconSettings}"
                                       Width="20" Height="20"
+                                      Foreground="{Binding $parent[Button].Foreground}"
                                       VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1"
                                        Text="设置"
                                        FontSize="16.50"
                                        Margin="12,0"
                                        FontWeight="SemiBold"
+                                       Foreground="{Binding $parent[Button].Foreground}"
                                        VerticalAlignment="Center" />
                             <PathIcon Grid.Column="2"
                                       Classes="about-option-chevron"
                                       Data="{StaticResource IconChevronRight}"
                                       Width="18" Height="18"
+                                      Foreground="{Binding $parent[Button].Foreground}"
                                       VerticalAlignment="Center" />
                         </Grid>
                     </Button>

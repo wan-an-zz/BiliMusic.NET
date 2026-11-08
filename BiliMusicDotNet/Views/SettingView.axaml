@@ -6,6 +6,7 @@
              xmlns:settings="clr-namespace:BiliMusicDotNet.Models.Settings"
              xmlns:suki="clr-namespace:SukiUI.Controls;assembly=SukiUI"
              xmlns:cheryl="clr-namespace:CherylUI.Controls;assembly=CherylUI"
+             xmlns:controls="clr-namespace:BiliMusicDotNet.Controls"
              xmlns:formFields="clr-namespace:CherylUI.Controls.FormFields;assembly=CherylUI"
              xmlns:cherylUi="clr-namespace:CherylUI;assembly=CherylUI"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -133,40 +134,30 @@
             </On>
 
             <On Options="Android">
-                <Grid>
-                    <cheryl:SliverPage Header="设置" IsBackVisible="False">
-                        <StackPanel Margin="0,20" Spacing="18">
-                            <ItemsControl ItemsSource="{Binding Sections}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="settings:SettingSectionGroup">
-                                        <cheryl:GroupBox Header="{Binding Title}" Margin="0,0,0,16">
-                                            <StackPanel Margin="10,2">
-                                                <ItemsControl ItemsSource="{Binding Items}"
-                                                              ItemTemplate="{StaticResource AndroidSettingItemTemplate}" />
-                                            </StackPanel>
-                                        </cheryl:GroupBox>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                <controls:SettingSliverPage Header="设置"
+                                            IsBackVisible="True"
+                                            BackCommand="{Binding CloseCommand}">
+                    <StackPanel Margin="0,20" Spacing="18">
+                        <ItemsControl ItemsSource="{Binding Sections}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="settings:SettingSectionGroup">
+                                    <cheryl:GroupBox Header="{Binding Title}" Margin="0,0,0,16">
+                                        <StackPanel Margin="10,2">
+                                            <ItemsControl ItemsSource="{Binding Items}"
+                                                          ItemTemplate="{StaticResource AndroidSettingItemTemplate}" />
+                                        </StackPanel>
+                                    </cheryl:GroupBox>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
-                            <TextBlock Text="暂无可配置的设置项"
-                                       IsVisible="{Binding IsEmpty}"
-                                       HorizontalAlignment="Center"
-                                       Opacity="0.6"
-                                       Margin="0,24" />
-                        </StackPanel>
-                    </cheryl:SliverPage>
-
-                    <Button x:Name="AndroidBackButton"
-                            Classes="Void"
-                            Command="{Binding CloseCommand}"
-                            Padding="23,40"
-                            HorizontalAlignment="Left"
-                            VerticalAlignment="Top"
-                            ZIndex="1">
-                        <PathIcon Data="{StaticResource IconBack}" Width="20" Height="20" />
-                    </Button>
-                </Grid>
+                        <TextBlock Text="暂无可配置的设置项"
+                                   IsVisible="{Binding IsEmpty}"
+                                   HorizontalAlignment="Center"
+                                   Opacity="0.6"
+                                   Margin="0,24" />
+                    </StackPanel>
+                </controls:SettingSliverPage>
             </On>
         </OnPlatform>
     </Panel>

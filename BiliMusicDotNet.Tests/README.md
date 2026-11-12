@@ -13,13 +13,10 @@ dotnet run --project .\BiliMusicDotNet.Tests\BiliMusicDotNet.Tests.csproj
 
 ```
 === TEST EXECUTION SUMMARY ===
-   BiliMusicDotNet.Tests  Total: 115, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.7s
+   BiliMusicDotNet.Tests  Total: 232, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 7.8s
 ```
 
 **提交前必须全绿（`Failed: 0` 且 `Errors: 0`）**，这是本仓库的提交闸门。
-
-> 当前有 9 个既有的 UI 弹窗用例为红（`AboutPage*Tests` / `QrLoginViewTests`），是上一次控件库切换留下的，
-> 与登录 / 凭据链路无关；判定本条时以"没有新增失败项"为准，基线可用 `git stash -u` 对照。
 
 ### 目标框架是 `net10.0-windows`
 
@@ -53,6 +50,9 @@ Windows 端的凭据加密直接用 DPAPI（`System.Security.Cryptography.Protec
 `Support/FakeCredentialStore.cs` 则是内存替身（可预置"磁盘上有什么"、可配置落盘失败），供不关心文件的用例使用。
 `Support/FakeEncryptService.cs` 是逐字节异或的可逆替身：它不带平台能力，让共享层测试与探针都能跑。
 
+音乐服务同样不碰真实网络与声卡：`Support/FakeAudioEngine.cs` 记录每次建流的 URL/偏移并手动触发播完事件，
+`Support/MusicResponses.cs` 提供 view 与 durl 的固定响应；测试因此不需要 BASS 原生库。
+
 桌面端的加密实现（`DpapiEncryptService`）靠 `<Compile Include>` 链接进本程序集：
 桌面端是带入口点的 WinExe 应用头，为测一个加密类把 Avalonia.Desktop / SukiUI / NLog 全拖进来不划算；
 链接的仍是同一份源码，桌面端改了这里就会跟着变。
@@ -71,6 +71,14 @@ Windows 端的凭据加密直接用 DPAPI（`System.Security.Cryptography.Protec
 | `CountdownFormatTests.cs` | 倒计时文本：`mm:ss` 格式化、不足一秒向上进位、归零即失效 |
 | `QrLoginViewModelTests.cs` | 扫码弹窗：加载态判定（不能用 `WaitingForScan` 判）、四类状态文案、倒计时起停与归零、取消后不再响应 |
 | `AboutPageViewModelTests.cs` | 「关于」页：默认值、登录成功换头像换名、资料/头像缺失回退、登出恢复默认、删盘失败仍按已登出渲染、取码失败收弹窗 |
+| `MusicUrlTests.cs` | 播放地址：请求头/Cookie、durl 分片与备用地址、协议相对地址升级、业务码/脏响应、缓存与并发去重、BASS 请求串 |
+| `MusicPlaylistTests.cs` | 播放列表：首尾插入、重复 BV 移动、自动播放边界、当前曲目保护、元数据回填 |
+| `MusicReplacePlaylistTests.cs` | 整表替换：先停流再换表、去重、自动播放、空表 Idle、迟到结束事件、失败保留新表 |
+| `MusicPlaybackTests.cs` | 播放控制：暂停继续、上下首、Select、任意曲目播放、三种插入播放位置、加载失败回滚 |
+| `MusicPlaylistPlayTests.cs` | 指定曲播放：下一首先切后移、非下一首先移后播、当前曲不重启、失败不移动 |
+| `MusicAutoAdvanceTests.cs` | 自动切歌：代次/状态守卫、尾曲停止、失败出口、事件路径与连续迟到事件 |
+| `MusicPauseResumeTests.cs` | 暂停恢复：正常恢复不重建、断流后按字节偏移重建、偏移失败从头播放 |
+| `MusicPrefetchTests.cs` | 预取：只解析不建流、删除后重算、元数据回填、失败不触发事件、播放复用缓存 |
 
 ### Headless（UI）测试怎么做的
 

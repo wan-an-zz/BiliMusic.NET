@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/tools/">
     <Project Path="tools/LoginQrProbe/LoginQrProbe.csproj" />
+    <Project Path="tools/MusicProbe/MusicProbe.csproj" />
   </Folder>
   <Project Path="BiliMusicDotNet.Android/BiliMusicDotNet.Android.csproj">
     <Deploy />

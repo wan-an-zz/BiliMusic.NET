@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <AssemblyName>MusicProbe</AssemblyName>
+        <RootNamespace>BiliMusicDotNet.Tools.MusicProbe</RootNamespace>
+        <IsPackable>false</IsPackable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="ManagedBass"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+    </ItemGroup>
+
+    <!--
+      链接被测源码而不是 ProjectReference：核心项目依赖 Avalonia，
+      其构建遥测在部分受限环境下会直接失败（与 LoginQrProbe 同一处理）。
+    -->
+    <ItemGroup>
+        <Compile Include="..\..\BiliMusicDotNet\Abstracts\IMusicService.cs" Link="Linked\IMusicService.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet\Abstracts\ICredentialService.cs" Link="Linked\ICredentialService.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet\Abstracts\IAudioEngine.cs" Link="Linked\IAudioEngine.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet\Models\Music\*.cs" Link="Linked\Models\Music\%(Filename)%(Extension)"/>
+        <Compile Include="..\..\BiliMusicDotNet\Models\Login\BiliLoginCredentials.cs" Link="Linked\Models\Login\BiliLoginCredentials.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet\Models\Exceptions\*.cs" Link="Linked\Models\Exceptions\%(Filename)%(Extension)"/>
+        <Compile Include="..\..\BiliMusicDotNet\Services\MusicService.cs" Link="Linked\MusicService.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet\Services\BassAudioEngine.cs" Link="Linked\BassAudioEngine.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet.Tests\Support\FakeAudioEngine.cs" Link="Linked\FakeAudioEngine.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet.Tests\Support\FakeBiliHandler.cs" Link="Linked\FakeBiliHandler.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet.Tests\Support\FakeCredentialStore.cs" Link="Linked\FakeCredentialStore.cs"/>
+        <Compile Include="..\..\BiliMusicDotNet.Tests\Support\MusicResponses.cs" Link="Linked\MusicResponses.cs"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Update="native/win-x64/*.dll"
+              Link="%(Filename)%(Extension)"
+              CopyToOutputDirectory="PreserveNewest"
+              CopyToPublishDirectory="PreserveNewest"/>
+    </ItemGroup>
+</Project>

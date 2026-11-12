@@ -25,6 +25,7 @@
         </PackageReference>
         <PackageReference Include="CherylUI" />
         <PackageReference Include="CommunityToolkit.Mvvm"/>
+        <PackageReference Include="ManagedBass" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
         <PackageReference Include="Microsoft.Extensions.Logging" />
         <PackageReference Include="NLog" />

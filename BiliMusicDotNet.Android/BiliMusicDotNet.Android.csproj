@@ -29,4 +29,13 @@
     <ItemGroup>
         <ProjectReference Include="..\BiliMusicDotNet\BiliMusicDotNet.csproj"/>
     </ItemGroup>
+
+    <!-- BASS 由 tools/fetch-bass.ps1 下载；显式 Abi 元数据不依赖默认的 **/*.so 通配。 -->
+    <ItemGroup>
+        <AndroidNativeLibrary Remove="native/android/**/*.so"/>
+        <AndroidNativeLibrary Include="native/android/arm64-v8a/*.so" Abi="arm64-v8a" Condition="Exists('native/android/arm64-v8a')"/>
+        <AndroidNativeLibrary Include="native/android/armeabi-v7a/*.so" Abi="armeabi-v7a" Condition="Exists('native/android/armeabi-v7a')"/>
+        <AndroidNativeLibrary Include="native/android/x86/*.so" Abi="x86" Condition="Exists('native/android/x86')"/>
+        <AndroidNativeLibrary Include="native/android/x86_64/*.so" Abi="x86_64" Condition="Exists('native/android/x86_64')"/>
+    </ItemGroup>
 </Project>

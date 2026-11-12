@@ -26,4 +26,12 @@
     <ItemGroup>
         <ProjectReference Include="..\BiliMusicDotNet\BiliMusicDotNet.csproj"/>
     </ItemGroup>
+
+    <!-- BASS 由 tools/fetch-bass.ps1 下载；缺文件时构建不报错。 -->
+    <ItemGroup>
+        <None Update="native/win-x64/*.dll"
+              Link="%(Filename)%(Extension)"
+              CopyToOutputDirectory="PreserveNewest"
+              CopyToPublishDirectory="PreserveNewest"/>
+    </ItemGroup>
 </Project>

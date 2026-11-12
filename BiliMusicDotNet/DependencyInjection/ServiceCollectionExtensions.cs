@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICredentialService, CredentialService>();
         services.AddSingleton<IBiliLoginService, BiliLoginService>();
         services.AddSingleton<ISettingService, SettingService>();
+        services.AddSingleton<IMusicService, MusicService>();
 
         return services;
     }
